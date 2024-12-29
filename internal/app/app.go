@@ -31,7 +31,7 @@ func Run(config string) {
 	}
 	defer userStorage.Close()
 
-	userService := service.NewUserService(userStorage)
+	userService := service.NewUserService(userStorage, logger)
 	userHandler := user.NewHandler(userService, logger)
 
 	trackStorage, err := repository.NewTrackStorage(cfg)
@@ -41,7 +41,7 @@ func Run(config string) {
 	}
 	defer trackStorage.Close()
 
-	trackService := service.NewTrackService(trackStorage)
+	trackService := service.NewTrackService(trackStorage, logger)
 	trackHandler := track.NewTrackHandler(trackService, logger)
 
 	playlistStorage, err := repository.NewPlaylistStorage(cfg)
@@ -51,7 +51,7 @@ func Run(config string) {
 	}
 	defer playlistStorage.Close()
 
-	playlistService := service.NewPlaylistService(playlistStorage)
+	playlistService := service.NewPlaylistService(playlistStorage, logger)
 	playlistHandler := playlist.NewPlaylistHandler(playlistService, logger)
 
 	router := gin.Default()
