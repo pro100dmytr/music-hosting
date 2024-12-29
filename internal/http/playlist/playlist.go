@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"log/slog"
 	"music-hosting/internal/models"
-	"music-hosting/internal/repository"
+	"music-hosting/internal/service"
 	"net/http"
 	"strconv"
 )
@@ -13,17 +13,19 @@ type PlaylistHandler interface {
 	CreatePlaylist() gin.HandlerFunc
 	GetPlaylistByID() gin.HandlerFunc
 	GetAllPlaylists() gin.HandlerFunc
+	GetPlaylistByName() gin.HandlerFunc
+	GetPlaylistByUserID() gin.HandlerFunc
 	UpdatePlaylist() gin.HandlerFunc
 	DeletePlaylist() gin.HandlerFunc
 }
 
 type Handler struct {
-	store  *repository.PlaylistStorage
-	logger *slog.Logger
+	service *service.PlaylistService
+	logger  *slog.Logger
 }
 
-func NewHandler(store *repository.PlaylistStorage, logger *slog.Logger) *Handler {
-	return &Handler{store: store, logger: logger}
+func NewPlaylistHandler(service *service.PlaylistService, logger *slog.Logger) *Handler {
+	return &Handler{service: service, logger: logger}
 }
 
 func (h *Handler) CreatePlaylist() gin.HandlerFunc {
@@ -31,24 +33,18 @@ func (h *Handler) CreatePlaylist() gin.HandlerFunc {
 		var playlist models.Playlist
 		if err := c.ShouldBindJSON(&playlist); err != nil {
 			h.logger.Error("Error parsing request body", slog.Any("Error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error parsing request body"})
 			return
 		}
 
-		if playlist.Name == "" {
-			h.logger.Error("Playlist name is required", slog.Any("Error", "Name is required"))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Name is required"})
-			return
-		}
-
-		err := h.store.Create(c.Request.Context(), &playlist)
+		createdPlaylist, err := h.service.CreatePlaylist(c.Request.Context(), &playlist)
 		if err != nil {
 			h.logger.Error("Error creating playlist", slog.Any("Error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating playlist"})
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"playlist": playlist})
+		c.JSON(http.StatusCreated, gin.H{"playlist": createdPlaylist})
 	}
 }
 
@@ -62,10 +58,10 @@ func (h *Handler) GetPlaylistByID() gin.HandlerFunc {
 			return
 		}
 
-		playlist, err := h.store.Get(c.Request.Context(), id)
+		playlist, err := h.service.GetPlaylistByID(c.Request.Context(), id)
 		if err != nil {
 			h.logger.Error("Error getting playlist", slog.Any("Error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting playlist"})
 			return
 		}
 
@@ -75,10 +71,46 @@ func (h *Handler) GetPlaylistByID() gin.HandlerFunc {
 
 func (h *Handler) GetAllPlaylists() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		playlists, err := h.store.GetAll(c.Request.Context())
+		playlists, err := h.service.GetAllPlaylists(c.Request.Context())
 		if err != nil {
 			h.logger.Error("Error getting playlists", slog.Any("Error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting playlists"})
+			return
+		}
+
+		c.JSON(http.StatusOK, playlists)
+	}
+}
+
+func (h *Handler) GetPlaylistByName() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := c.Param("name")
+
+		playlists, err := h.service.GetPlaylistByName(c.Request.Context(), name)
+		if err != nil {
+			h.logger.Error("Error getting playlist by name", slog.Any("Error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting playlist by name"})
+			return
+		}
+
+		c.JSON(http.StatusOK, playlists)
+	}
+}
+
+func (h *Handler) GetPlaylistByUserID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDStr := c.Param("userID")
+		userID, err := strconv.Atoi(userIDStr)
+		if err != nil {
+			h.logger.Error("Invalid user ID", slog.Any("Error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+			return
+		}
+
+		playlists, err := h.service.GetPlaylistByUserID(c.Request.Context(), userID)
+		if err != nil {
+			h.logger.Error("Error getting playlist by user ID", slog.Any("Error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting playlist by user ID"})
 			return
 		}
 
@@ -99,18 +131,18 @@ func (h *Handler) UpdatePlaylist() gin.HandlerFunc {
 		var playlist models.Playlist
 		if err := c.ShouldBindJSON(&playlist); err != nil {
 			h.logger.Error("Error parsing request body", slog.Any("Error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error parsing request body"})
 			return
 		}
 
-		err = h.store.Update(c.Request.Context(), id, &playlist)
+		updatedPlaylist, err := h.service.UpdatePlaylist(c.Request.Context(), id, &playlist)
 		if err != nil {
 			h.logger.Error("Error updating playlist", slog.Any("Error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating playlist"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"playlist": playlist})
+		c.JSON(http.StatusOK, updatedPlaylist)
 	}
 }
 
@@ -124,10 +156,10 @@ func (h *Handler) DeletePlaylist() gin.HandlerFunc {
 			return
 		}
 
-		err = h.store.Delete(c.Request.Context(), id)
+		err = h.service.DeletePlaylist(c.Request.Context(), id)
 		if err != nil {
 			h.logger.Error("Error deleting playlist", slog.Any("Error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting playlist"})
 			return
 		}
 
