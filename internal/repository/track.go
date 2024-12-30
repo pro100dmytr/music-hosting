@@ -3,9 +3,9 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"errors"
 	"music-hosting/internal/config"
-	"music-hosting/internal/models"
+	"music-hosting/internal/models/repositorys"
 	"music-hosting/pkg/database/postgresql"
 )
 
@@ -26,21 +26,22 @@ func NewTrackStorage(cfg *config.Config) (*TrackStorage, error) {
 	return &TrackStorage{db: db}, nil
 }
 
-func (s *TrackStorage) Create(ctx context.Context, track *models.Track) error {
+func (s *TrackStorage) Create(ctx context.Context, track *repositorys.Track) (int, error) {
 	const query = `INSERT INTO tracks (name, artist, url) VALUES ($1, $2, $3) RETURNING id`
 	var id int
 	err := s.db.QueryRowContext(ctx, query, track.Name, track.Artist, track.URL).Scan(&id)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	track.ID = id
-	return nil
+	return id, nil
 }
 
-func (s *TrackStorage) Get(ctx context.Context, id int) (*models.Track, error) {
+func (s *TrackStorage) Get(ctx context.Context, id int) (*repositorys.Track, error) {
 	const query = `SELECT * FROM tracks WHERE id = $1`
-	track := &models.Track{}
+
+	track := &repositorys.Track{}
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&track.ID,
 		&track.Name,
@@ -48,6 +49,9 @@ func (s *TrackStorage) Get(ctx context.Context, id int) (*models.Track, error) {
 		&track.URL,
 	)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
 		return nil, err
 	}
 
@@ -55,7 +59,7 @@ func (s *TrackStorage) Get(ctx context.Context, id int) (*models.Track, error) {
 	return track, nil
 }
 
-func (s *TrackStorage) GetAll(ctx context.Context) ([]*models.Track, error) {
+func (s *TrackStorage) GetAll(ctx context.Context) ([]*repositorys.Track, error) {
 	const query = `SELECT * FROM tracks`
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -63,9 +67,9 @@ func (s *TrackStorage) GetAll(ctx context.Context) ([]*models.Track, error) {
 	}
 	defer rows.Close()
 
-	var tracks []*models.Track
+	var tracks []*repositorys.Track
 	for rows.Next() {
-		track := &models.Track{}
+		track := &repositorys.Track{}
 		if err := rows.Scan(
 			&track.ID,
 			&track.Name,
@@ -79,7 +83,7 @@ func (s *TrackStorage) GetAll(ctx context.Context) ([]*models.Track, error) {
 	return tracks, rows.Err()
 }
 
-func (s *TrackStorage) GetForName(ctx context.Context, name string) ([]*models.Track, error) {
+func (s *TrackStorage) GetForName(ctx context.Context, name string) ([]*repositorys.Track, error) {
 	const query = `SELECT * FROM tracks WHERE name = $1`
 	rows, err := s.db.QueryContext(ctx, query, name)
 	if err != nil {
@@ -87,9 +91,9 @@ func (s *TrackStorage) GetForName(ctx context.Context, name string) ([]*models.T
 	}
 	defer rows.Close()
 
-	var tracks []*models.Track
+	var tracks []*repositorys.Track
 	for rows.Next() {
-		track := &models.Track{}
+		track := &repositorys.Track{}
 		if err := rows.Scan(
 			&track.ID,
 			&track.Name,
@@ -103,7 +107,7 @@ func (s *TrackStorage) GetForName(ctx context.Context, name string) ([]*models.T
 	return tracks, rows.Err()
 }
 
-func (s *TrackStorage) GetForArtist(ctx context.Context, artist string) ([]*models.Track, error) {
+func (s *TrackStorage) GetForArtist(ctx context.Context, artist string) ([]*repositorys.Track, error) {
 	const query = `SELECT * FROM tracks WHERE artist = $1`
 	rows, err := s.db.QueryContext(ctx, query, artist)
 	if err != nil {
@@ -111,9 +115,9 @@ func (s *TrackStorage) GetForArtist(ctx context.Context, artist string) ([]*mode
 	}
 	defer rows.Close()
 
-	var tracks []*models.Track
+	var tracks []*repositorys.Track
 	for rows.Next() {
-		track := &models.Track{}
+		track := &repositorys.Track{}
 		if err := rows.Scan(
 			&track.ID,
 			&track.Name,
@@ -127,7 +131,7 @@ func (s *TrackStorage) GetForArtist(ctx context.Context, artist string) ([]*mode
 	return tracks, rows.Err()
 }
 
-func (s *TrackStorage) Update(ctx context.Context, track *models.Track, id int) error {
+func (s *TrackStorage) Update(ctx context.Context, track *repositorys.Track, id int) error {
 	const query = `UPDATE tracks SET name = $1, artist = $2, url = $3 WHERE id = $4`
 	result, err := s.db.ExecContext(ctx, query, track.Name, track.Artist, track.URL, id)
 	if err != nil {
@@ -165,29 +169,28 @@ func (s *TrackStorage) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-func (s *TrackStorage) GetTracks(ctx context.Context, limit, offset int) ([]*models.Track, error) {
-	const query = `SELECT id, name, artist, url FROM tracks LIMIT $1 OFFSET $2`
+func (s *TrackStorage) GetTracks(ctx context.Context, offset, limit int) ([]*repositorys.Track, error) {
+	const query = `SELECT id, name, artist, url FROM tracks OFFSET $1 LIMIT $2`
 
-	rows, err := s.db.QueryContext(ctx, query, limit, offset)
+	rows, err := s.db.QueryContext(ctx, query, offset, limit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query tracks: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
 
-	var tracks []*models.Track
+	var tracks []*repositorys.Track
 	for rows.Next() {
-		track := &models.Track{}
-
-		if err := rows.Scan(&track.ID, &track.Name, &track.Artist, &track.URL); err != nil {
-			return nil, fmt.Errorf("failed to scan track row: %w", err)
+		track := &repositorys.Track{}
+		if err := rows.Scan(
+			&track.ID,
+			&track.Name,
+			&track.Artist,
+			&track.URL,
+		); err != nil {
+			return nil, err
 		}
-
 		tracks = append(tracks, track)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return tracks, nil
+	return tracks, rows.Err()
 }

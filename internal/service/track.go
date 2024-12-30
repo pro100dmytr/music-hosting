@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
-	"music-hosting/internal/models"
+	"music-hosting/internal/models/repositorys"
+	"music-hosting/internal/models/services"
 	"music-hosting/internal/repository"
-	"music-hosting/pkg/utils/trackutils"
+	"strconv"
 )
 
 type TrackService struct {
@@ -22,91 +24,165 @@ func NewTrackService(trackRepo *repository.TrackStorage, logger *slog.Logger) *T
 	}
 }
 
-func (s *TrackService) CreateTrack(ctx context.Context, track *models.Track) (*models.Track, error) {
-	if err := trackutils.ValidateTrack(track); err != nil {
-		s.logger.Error("Error validating track", slog.Any("error", err))
-		return nil, err
+func (s *TrackService) CreateTrack(ctx context.Context, track *services.Track) error {
+	repoTrack := repositorys.Track{
+		Name:   track.Name,
+		Artist: track.Artist,
+		URL:    track.URL,
 	}
 
-	if err := s.trackRepo.Create(ctx, track); err != nil {
-		s.logger.Error("Error creating track in database", slog.Any("error", err))
-		return nil, err
+	id, err := s.trackRepo.Create(ctx, &repoTrack)
+	if err != nil {
+		return err
 	}
 
-	return track, nil
+	track.ID = id
+	return nil
 }
 
-func (s *TrackService) GetTrackByID(ctx context.Context, id int) (*models.Track, error) {
-	track, err := s.trackRepo.Get(ctx, id)
+func (s *TrackService) GetTrackByID(ctx context.Context, id int) (*services.Track, error) {
+	repoTrack, err := s.trackRepo.Get(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			s.logger.Error("Track not found", slog.Any("error", err))
-			return nil, err
+			return nil, sql.ErrNoRows
 		}
-		s.logger.Error("Error fetching track by ID", slog.Any("error", err))
 		return nil, err
 	}
+
+	track := &services.Track{
+		ID:     repoTrack.ID,
+		Name:   repoTrack.Name,
+		Artist: repoTrack.Artist,
+		URL:    repoTrack.URL,
+	}
+
 	return track, nil
 }
 
-func (s *TrackService) GetAllTracks(ctx context.Context) ([]*models.Track, error) {
-	tracks, err := s.trackRepo.GetAll(ctx)
+func (s *TrackService) GetAllTracks(ctx context.Context) ([]*services.Track, error) {
+	repoTracks, err := s.trackRepo.GetAll(ctx)
 	if err != nil {
-		s.logger.Error("Error fetching all tracks", slog.Any("error", err))
 		return nil, err
 	}
+
+	var tracks []*services.Track
+	for _, repoTrack := range repoTracks {
+		track := &services.Track{
+			ID:     repoTrack.ID,
+			Name:   repoTrack.Name,
+			Artist: repoTrack.Artist,
+			URL:    repoTrack.URL,
+		}
+		tracks = append(tracks, track)
+	}
+
 	return tracks, nil
 }
 
-func (s *TrackService) GetTrackByName(ctx context.Context, name string) ([]*models.Track, error) {
-	track, err := s.trackRepo.GetForName(ctx, name)
+func (s *TrackService) UpdateTrack(ctx context.Context, id int, track *services.Track) (*services.Track, error) {
+	trackRepo := repositorys.Track{
+		ID:     track.ID,
+		Name:   track.Name,
+		Artist: track.Artist,
+		URL:    track.URL,
+	}
+
+	err := s.trackRepo.Update(ctx, &trackRepo, id)
 	if err != nil {
-		s.logger.Error("Error fetching track by name", slog.Any("error", err))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
 		return nil, err
 	}
+
+	track.ID = id
 	return track, nil
-}
-
-func (s *TrackService) GetTrackByArtist(ctx context.Context, artist string) ([]*models.Track, error) {
-	track, err := s.trackRepo.GetForArtist(ctx, artist)
-	if err != nil {
-		s.logger.Error("Error fetching track by artist", slog.Any("error", err))
-		return nil, err
-	}
-	return track, nil
-}
-
-func (s *TrackService) UpdateTrack(ctx context.Context, track *models.Track, id int) error {
-	if err := trackutils.ValidateTrack(track); err != nil {
-		s.logger.Error("Error validating track", slog.Any("error", err))
-		return err
-	}
-
-	if err := s.trackRepo.Update(ctx, track, id); err != nil {
-		s.logger.Error("Error updating track in database", slog.Any("error", err))
-		return err
-	}
-
-	return nil
 }
 
 func (s *TrackService) DeleteTrack(ctx context.Context, id int) error {
-	if err := s.trackRepo.Delete(ctx, id); err != nil {
+	err := s.trackRepo.Delete(ctx, id)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			s.logger.Error("Track not found for deletion", slog.Any("error", err))
-			return err
+			return sql.ErrNoRows
 		}
-		s.logger.Error("Error deleting track", slog.Any("error", err))
 		return err
 	}
+
 	return nil
 }
 
-func (s *TrackService) GetTracksWithPagination(ctx context.Context, limit, offset int) ([]*models.Track, error) {
-	tracks, err := s.trackRepo.GetTracks(ctx, limit, offset)
-	if err != nil {
-		s.logger.Error("Error fetching tracks with pagination", slog.Any("error", err))
+func (s *TrackService) GetTracksWithPagination(ctx context.Context, offset, limit string) ([]*services.Track, error) {
+	limitInt, err := strconv.Atoi(limit)
+	if err != nil || limitInt < 1 {
+		return nil, fmt.Errorf("invalid limit parametr")
+	}
+
+	offsetInt, err := strconv.Atoi(offset)
+	if err != nil || offsetInt < 0 {
 		return nil, err
 	}
+
+	repoTracks, err := s.trackRepo.GetTracks(ctx, offsetInt, limitInt)
+	if err != nil {
+		return nil, err
+	}
+
+	var tracks []*services.Track
+	for _, repoTrack := range repoTracks {
+		track := &services.Track{
+			ID:     repoTrack.ID,
+			Name:   repoTrack.Name,
+			Artist: repoTrack.Artist,
+			URL:    repoTrack.URL,
+		}
+		tracks = append(tracks, track)
+	}
+
+	return tracks, nil
+}
+
+func (s *TrackService) GetTrackByName(ctx context.Context, name string) ([]*services.Track, error) {
+	repoTracks, err := s.trackRepo.GetForName(ctx, name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, err
+	}
+
+	var tracks []*services.Track
+	for _, repoTrack := range repoTracks {
+		track := &services.Track{
+			ID:     repoTrack.ID,
+			Name:   repoTrack.Name,
+			Artist: repoTrack.Artist,
+			URL:    repoTrack.URL,
+		}
+		tracks = append(tracks, track)
+	}
+
+	return tracks, nil
+}
+
+func (s *TrackService) GetTrackByArtist(ctx context.Context, artist string) ([]*services.Track, error) {
+	repoTracks, err := s.trackRepo.GetForArtist(ctx, artist)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, err
+	}
+
+	var tracks []*services.Track
+	for _, repoTrack := range repoTracks {
+		track := &services.Track{
+			ID:     repoTrack.ID,
+			Name:   repoTrack.Name,
+			Artist: repoTrack.Artist,
+			URL:    repoTrack.URL,
+		}
+		tracks = append(tracks, track)
+	}
+
 	return tracks, nil
 }

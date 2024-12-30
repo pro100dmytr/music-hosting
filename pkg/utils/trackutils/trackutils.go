@@ -2,10 +2,10 @@ package trackutils
 
 import (
 	"errors"
-	"music-hosting/internal/models"
+	"music-hosting/internal/models/services"
 )
 
-func ValidateTrack(track *models.Track) error {
+func ValidateTrack(track *services.Track) error {
 	if track.Name == "" {
 		return errors.New("name is required")
 	}

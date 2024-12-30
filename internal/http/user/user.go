@@ -5,8 +5,11 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"log/slog"
-	"music-hosting/internal/models"
+	"music-hosting/internal/models/https"
+	"music-hosting/internal/models/services"
 	"music-hosting/internal/service"
+	"music-hosting/pkg/utils/jwtutils"
+	"music-hosting/pkg/utils/userutils"
 	"net/http"
 	"strconv"
 )
@@ -31,7 +34,7 @@ func NewHandler(service *service.UserService, logger *slog.Logger) *UserHandler 
 
 func (h *UserHandler) CreateUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var user models.User
+		var user https.User
 
 		if err := c.ShouldBindJSON(&user); err != nil {
 			h.logger.Error("Invalid request", slog.Any("error", err))
@@ -39,14 +42,24 @@ func (h *UserHandler) CreateUser() gin.HandlerFunc {
 			return
 		}
 
-		newUser, err := h.service.CreateUser(c.Request.Context(), &user)
+		userServ := services.User{
+			Login:      user.Login,
+			Email:      user.Email,
+			Password:   user.Password,
+			PlaylistID: user.PlaylistID,
+		}
+
+		err := h.service.CreateUser(c.Request.Context(), &userServ)
 		if err != nil {
 			h.logger.Error("Failed to create user", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"user": newUser})
+		c.JSON(http.StatusCreated, gin.H{
+			"message": "User created",
+			"userID":  userServ.ID,
+		})
 	}
 }
 
@@ -62,16 +75,25 @@ func (h *UserHandler) GetUserID() gin.HandlerFunc {
 		user, err := h.service.GetUser(c.Request.Context(), id)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				h.logger.Warn("User not found", slog.Any("error", err))
+				h.logger.Error("User not found", slog.Any("error", err))
 				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 				return
 			}
+
 			h.logger.Error("Failed to retrieve user", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"user": user})
+		userHttp := https.User{
+			ID:         user.ID,
+			Login:      user.Login,
+			Email:      user.Email,
+			Password:   user.Password,
+			PlaylistID: user.PlaylistID,
+		}
+
+		c.JSON(http.StatusOK, gin.H{"user": userHttp})
 	}
 }
 
@@ -79,12 +101,24 @@ func (h *UserHandler) GetAllUsers() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		users, err := h.service.GetAllUsers(c.Request.Context())
 		if err != nil {
-			h.logger.Error("Failed to retrieve users", slog.Any("err", err))
+			h.logger.Error("Failed to retrieve users", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve users"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"users": users})
+		var usersHttp []https.User
+		for _, user := range users {
+			userHttp := https.User{
+				ID:         user.ID,
+				Login:      user.Login,
+				Email:      user.Email,
+				Password:   user.Password,
+				PlaylistID: user.PlaylistID,
+			}
+			usersHttp = append(usersHttp, userHttp)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"users": usersHttp})
 	}
 }
 
@@ -97,26 +131,41 @@ func (h *UserHandler) UpdateUser() gin.HandlerFunc {
 			return
 		}
 
-		var user models.User
+		var user https.User
 		if err := c.ShouldBindJSON(&user); err != nil {
-			h.logger.Error("Invalid request body", slog.Any("err", err))
+			h.logger.Error("Invalid request body", slog.Any("error", err))
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 			return
 		}
 
-		updatedUser, err := h.service.UpdateUser(c.Request.Context(), id, &user)
+		userServ := services.User{
+			Login:      user.Login,
+			Email:      user.Email,
+			Password:   user.Password,
+			PlaylistID: user.PlaylistID,
+		}
+
+		updatedUser, err := h.service.UpdateUser(c.Request.Context(), id, &userServ)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				h.logger.Warn("User not found", slog.Any("id", id))
+				h.logger.Error("User not found", slog.Any("error", err))
 				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 				return
 			}
-			h.logger.Error("Failed to update user", slog.Any("err", err))
+			h.logger.Error("Failed to update user", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"user": updatedUser})
+		userHttp := https.User{
+			ID:         updatedUser.ID,
+			Login:      updatedUser.Login,
+			Email:      updatedUser.Email,
+			Password:   updatedUser.Password,
+			PlaylistID: updatedUser.PlaylistID,
+		}
+
+		c.JSON(http.StatusOK, gin.H{"user": userHttp})
 	}
 }
 
@@ -132,11 +181,11 @@ func (h *UserHandler) DeleteUser() gin.HandlerFunc {
 		err = h.service.DeleteUser(c.Request.Context(), id)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				h.logger.Warn("User not found", slog.Any("id", id))
+				h.logger.Error("User not found", slog.Any("error", err))
 				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 				return
 			}
-			h.logger.Error("Failed to delete user", slog.Any("err", err))
+			h.logger.Error("Failed to delete user", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
 			return
 		}
@@ -147,27 +196,61 @@ func (h *UserHandler) DeleteUser() gin.HandlerFunc {
 
 func (h *UserHandler) GetUserWithPagination() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		min, err := strconv.Atoi(c.DefaultQuery("min", "1"))
-		if err != nil || min < 1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid min parameter"})
-			return
-		}
+		offset := c.DefaultQuery("offset", "0")
+		limit := c.DefaultQuery("limit", "10")
 
-		max, err := strconv.Atoi(c.DefaultQuery("max", "10"))
-		if err != nil || max < 1 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid max parameter"})
-			return
-		}
-
-		offset := (min - 1) * max
-
-		users, err := h.service.GetUsersWithPagination(c.Request.Context(), max, offset)
+		users, err := h.service.GetUsersWithPagination(c.Request.Context(), limit, offset)
 		if err != nil {
-			h.logger.Error("Failed to retrieve users", slog.Any("err", err))
+			h.logger.Error("Failed to retrieve users with pagination", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve users"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"users": users})
+		var usersHttp []https.User
+		for _, user := range users {
+			userHttp := https.User{
+				ID:         user.ID,
+				Login:      user.Login,
+				Email:      user.Email,
+				Password:   user.Password,
+				PlaylistID: user.PlaylistID,
+			}
+			usersHttp = append(usersHttp, userHttp)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"users": usersHttp})
+	}
+}
+
+func (h *UserHandler) Login() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var user https.User
+
+		if err := c.ShouldBindJSON(&user); err != nil {
+			h.logger.Error("Invalid request", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		existingUser, err := h.service.GetUserByLogin(c.Request.Context(), user.Login)
+		if err != nil {
+			h.logger.Error("User not found", slog.Any("error", err))
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+			return
+		}
+
+		if !userutils.CheckPasswordHash(user.Password, existingUser.Password) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+			return
+		}
+
+		token, err := jwtutils.GenerateToken(existingUser.ID)
+		if err != nil {
+			h.logger.Error("Failed to generate token", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"token": token})
 	}
 }

@@ -27,6 +27,12 @@ func OpenConnection(cfg *config.Config) (*sql.DB, error) {
 		return nil, err
 	}
 
+	//err = goose.Up(db, "db\\migrations")
+	//if err != nil {
+	//	slog.Error("Failed to run migrations", err)
+	//	return nil, err
+	//}
+
 	return db, nil
 }
 func CloseConn(db *sql.DB) error {

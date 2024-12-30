@@ -3,11 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"errors"
 	"music-hosting/internal/config"
-	"music-hosting/internal/models"
+	"music-hosting/internal/models/repositorys"
 	"music-hosting/pkg/database/postgresql"
-	"music-hosting/pkg/utils/convertutils"
 )
 
 type UserStorage struct {
@@ -27,8 +26,8 @@ func NewUserStorage(cfg *config.Config) (*UserStorage, error) {
 	return &UserStorage{db: db}, nil
 }
 
-func (s *UserStorage) Create(ctx context.Context, user *models.User) (int, error) {
-	const query = `INSERT INTO users (login, email, password) VALUES ($1, $2, $3) RETURNING id`
+func (s *UserStorage) Create(ctx context.Context, user *repositorys.User) (int, error) {
+	const query = `INSERT INTO users (login, email, password, playlist_id) VALUES ($1, $2, $3, $4) RETURNING id`
 	var id int
 	err := s.db.QueryRowContext(
 		ctx,
@@ -36,33 +35,34 @@ func (s *UserStorage) Create(ctx context.Context, user *models.User) (int, error
 		user.Login,
 		user.Email,
 		user.Password,
+		user.PlaylistID,
 	).Scan(&id)
 
 	if err != nil {
-		return user.ID, err
+		return 0, err
 	}
 
-	user.ID = id
-	return user.ID, nil
+	return id, nil
 }
 
-func (s *UserStorage) Get(ctx context.Context, id int) (*models.User, error) {
-	const query = `SELECT * FROM users WHERE id = $1`
-	var userIDRaw []byte
-	user := &models.User{}
+func (s *UserStorage) Get(ctx context.Context, id int) (*repositorys.User, error) {
+	const query = `
+        SELECT id, login, email, password, playlist_id 
+        FROM users 
+        WHERE id = $1`
+
+	user := &repositorys.User{}
 	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&user.ID,
 		&user.Login,
 		&user.Email,
 		&user.Password,
-		&userIDRaw,
+		&user.PlaylistID,
 	)
 	if err != nil {
-		return nil, err
-	}
-
-	user.PlaylistID, err = convertutils.StringConvertIntoIntSlice(string(userIDRaw))
-	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, sql.ErrNoRows
+		}
 		return nil, err
 	}
 
@@ -70,35 +70,111 @@ func (s *UserStorage) Get(ctx context.Context, id int) (*models.User, error) {
 	return user, nil
 }
 
-func (s *UserStorage) GetAll(ctx context.Context) ([]*models.User, error) {
-	const query = `SELECT * FROM users`
+func (s *UserStorage) GetAll(ctx context.Context) ([]*repositorys.User, error) {
+	const query = `
+        SELECT id, login, email, password, playlist_id 
+        FROM users`
+
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-
 	defer rows.Close()
 
-	var users []*models.User
+	var users []*repositorys.User
 	for rows.Next() {
-		var playlistIDRaw []byte
-
-		user := &models.User{}
+		user := &repositorys.User{}
 		if err := rows.Scan(
 			&user.ID,
 			&user.Login,
 			&user.Email,
 			&user.Password,
-			&playlistIDRaw,
+			&user.PlaylistID,
 		); err != nil {
 			return nil, err
 		}
+		users = append(users, user)
+	}
 
-		user.PlaylistID, err = convertutils.StringConvertIntoIntSlice(string(playlistIDRaw))
-		if err != nil {
+	return users, rows.Err()
+}
+
+func (s *UserStorage) Update(ctx context.Context, user *repositorys.User, id int) error {
+	const query = `
+        UPDATE users 
+        SET login = $1, email = $2, password = $3, playlist_id = $4 
+        WHERE id = $5`
+
+	result, err := s.db.ExecContext(
+		ctx,
+		query,
+		user.Login,
+		user.Email,
+		user.Password,
+		user.PlaylistID,
+		id,
+	)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+func (s *UserStorage) Delete(ctx context.Context, id int) error {
+	const query = `DELETE FROM users WHERE id = $1`
+
+	result, err := s.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+func (s *UserStorage) GetUsers(ctx context.Context, offset, limit int) ([]*repositorys.User, error) {
+	const query = `
+        SELECT id, login, email, password, playlist_id 
+        FROM users 
+        OFFSET $1 
+        LIMIT $2`
+
+	rows, err := s.db.QueryContext(ctx, query, offset, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*repositorys.User
+	for rows.Next() {
+		user := &repositorys.User{}
+		if err := rows.Scan(
+			&user.ID,
+			&user.Login,
+			&user.Email,
+			&user.Password,
+			&user.PlaylistID,
+		); err != nil {
 			return nil, err
 		}
-
 		users = append(users, user)
 	}
 
@@ -109,88 +185,17 @@ func (s *UserStorage) GetAll(ctx context.Context) ([]*models.User, error) {
 	return users, nil
 }
 
-func (s *UserStorage) Update(ctx context.Context, user *models.User, id int) error {
-	const checkPlaylistQuery = `SELECT COUNT(*) FROM playlists WHERE id = $1`
-	for _, playlistID := range user.PlaylistID {
-		var count int
-		err := s.db.QueryRowContext(ctx, checkPlaylistQuery, playlistID).Scan(&count)
-		if err != nil {
-			return err
+func (s *UserStorage) GetUserByLogin(ctx context.Context, login string) (*repositorys.User, error) {
+	user := &repositorys.User{}
+
+	query := `SELECT id, login, password FROM users WHERE login = $1`
+	err := s.db.QueryRowContext(ctx, query, login).Scan(&user.ID, &user.Login, &user.Password)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, err
 		}
-		if count == 0 {
-			return sql.ErrNoRows
-		}
+		return nil, err
 	}
 
-	const query = `UPDATE users SET login = $1, email = $2, password = $3, playlist_id = $4 WHERE id = $5`
-	playlistIDString := convertutils.IntSliceConvertIntoString(user.PlaylistID)
-
-	result, err := s.db.ExecContext(ctx, query, user.Login, user.Email, user.Password, playlistIDString, id)
-	if err != nil {
-		return err
-	}
-
-	n, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-
-	user.ID = id
-	return nil
-}
-
-func (s *UserStorage) Delete(ctx context.Context, id int) error {
-	const query = `DELETE FROM users WHERE id = $1`
-	result, err := s.db.ExecContext(ctx, query, id)
-	if err != nil {
-		return err
-	}
-
-	n, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if n == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
-}
-
-func (s *UserStorage) GetUsers(ctx context.Context, limit, offset int) ([]*models.User, error) {
-	const query = `SELECT id, login, email, playlist_id FROM users LIMIT $1 OFFSET $2`
-
-	rows, err := s.db.QueryContext(ctx, query, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query users: %w", err)
-	}
-	defer rows.Close()
-
-	var users []*models.User
-	for rows.Next() {
-		user := &models.User{}
-		var playlistIDRaw []byte
-
-		if err := rows.Scan(&user.ID, &user.Login, &user.Email, &playlistIDRaw); err != nil {
-			return nil, fmt.Errorf("failed to scan user row: %w", err)
-		}
-
-		user.PlaylistID, err = convertutils.StringConvertIntoIntSlice(string(playlistIDRaw))
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert playlist_id: %w", err)
-		}
-
-		users = append(users, user)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows iteration error: %w", err)
-	}
-
-	return users, nil
+	return user, nil
 }

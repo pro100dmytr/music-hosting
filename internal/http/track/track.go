@@ -1,11 +1,13 @@
 package track
 
 import (
+	"database/sql"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"log/slog"
-	"music-hosting/internal/models"
+	"music-hosting/internal/models/https"
+	"music-hosting/internal/models/services"
 	"music-hosting/internal/service"
-	"music-hosting/pkg/utils/trackutils"
 	"net/http"
 	"strconv"
 )
@@ -35,27 +37,27 @@ func NewTrackHandler(service *service.TrackService, logger *slog.Logger) *TrackH
 
 func (h *TrackHandler) CreateTrack() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var track models.Track
+		var track https.Track
 		if err := c.ShouldBindJSON(&track); err != nil {
 			h.logger.Error("Invalid request", slog.Any("error", err))
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 			return
 		}
 
-		if err := trackutils.ValidateTrack(&track); err != nil {
-			h.logger.Error("Error validating track", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Error validating track"})
-			return
+		trackServ := services.Track{
+			Name:   track.Name,
+			Artist: track.Artist,
+			URL:    track.URL,
 		}
 
-		createdTrack, err := h.service.CreateTrack(c.Request.Context(), &track)
+		err := h.service.CreateTrack(c.Request.Context(), &trackServ)
 		if err != nil {
 			h.logger.Error("Error creating track", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating track"})
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"track": createdTrack})
+		c.JSON(http.StatusCreated, gin.H{"message": "Created track"})
 	}
 }
 
@@ -71,12 +73,25 @@ func (h *TrackHandler) GetTrackByID() gin.HandlerFunc {
 
 		track, err := h.service.GetTrackByID(c.Request.Context(), id)
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				h.logger.Error("Track not found", slog.Any("error", err))
+				c.JSON(http.StatusNotFound, gin.H{"error": "Track not found"})
+				return
+			}
+
 			h.logger.Error("Error fetching track by ID", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching track by ID"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"track": track})
+		trackHttp := https.Track{
+			ID:     track.ID,
+			Name:   track.Name,
+			Artist: track.Artist,
+			URL:    track.URL,
+		}
+
+		c.JSON(http.StatusOK, gin.H{"track": trackHttp})
 	}
 }
 
@@ -89,7 +104,108 @@ func (h *TrackHandler) GetAllTracks() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"tracks": tracks})
+		var tracksHttp []https.Track
+		for _, track := range tracks {
+			trackHttp := https.Track{
+				ID:     track.ID,
+				Name:   track.Name,
+				Artist: track.Artist,
+				URL:    track.URL,
+			}
+			tracksHttp = append(tracksHttp, trackHttp)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"tracks": tracksHttp})
+	}
+}
+
+func (h *TrackHandler) UpdateTrack() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			h.logger.Error("Invalid track ID", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid track ID"})
+			return
+		}
+
+		var track https.Track
+		if err := c.ShouldBindJSON(&track); err != nil {
+			h.logger.Error("Invalid request", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+			return
+		}
+
+		trackServ := services.Track{
+			ID:     id,
+			Name:   track.Name,
+			Artist: track.Artist,
+			URL:    track.URL,
+		}
+
+		updatedTrack, err := h.service.UpdateTrack(c.Request.Context(), id, &trackServ)
+		if err != nil {
+			h.logger.Error("Error updating track", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating track"})
+			return
+		}
+
+		trackHttp := https.Track{
+			ID:     updatedTrack.ID,
+			Name:   updatedTrack.Name,
+			Artist: updatedTrack.Artist,
+			URL:    updatedTrack.URL,
+		}
+
+		c.JSON(http.StatusOK, gin.H{"track": trackHttp})
+	}
+}
+
+func (h *TrackHandler) DeleteTrack() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			h.logger.Error("Invalid track ID", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid track ID"})
+			return
+		}
+
+		err = h.service.DeleteTrack(c.Request.Context(), id)
+		if err != nil {
+			h.logger.Error("Error deleting track", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting track"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Track deleted successfully"})
+	}
+}
+
+func (h *TrackHandler) GetTracksWithPagination() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		offset := c.DefaultQuery("offset", "0")
+		limit := c.DefaultQuery("limit", "10")
+
+		tracks, err := h.service.GetTracksWithPagination(c.Request.Context(), limit, offset)
+		if err != nil {
+			h.logger.Error("Error fetching tracks with pagination", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching tracks with pagination"})
+			return
+		}
+
+		var tracksHttp []https.Track
+		for _, track := range tracks {
+			trackHttp := https.Track{
+				ID:     track.ID,
+				Name:   track.Name,
+				Artist: track.Artist,
+				URL:    track.URL,
+			}
+			tracksHttp = append(tracksHttp, trackHttp)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"tracks": tracksHttp})
 	}
 }
 
@@ -118,90 +234,5 @@ func (h *TrackHandler) GetTrackByArtist() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"track": track})
-	}
-}
-
-func (h *TrackHandler) UpdateTrack() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idStr := c.Param("id")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			h.logger.Error("Invalid track ID", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid track ID"})
-			return
-		}
-
-		var track models.Track
-		if err := c.ShouldBindJSON(&track); err != nil {
-			h.logger.Error("Invalid request body", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-			return
-		}
-
-		if err := trackutils.ValidateTrack(&track); err != nil {
-			h.logger.Error("Error validating track", slog.Any("track", track))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Error validating track"})
-			return
-		}
-
-		err = h.service.UpdateTrack(c.Request.Context(), &track, id)
-		if err != nil {
-			h.logger.Error("Error updating track", slog.Int("id", id), slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating track"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"track": track})
-	}
-}
-
-func (h *TrackHandler) DeleteTrack() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idStr := c.Param("id")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			h.logger.Error("Invalid track ID", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid track ID"})
-			return
-		}
-
-		err = h.service.DeleteTrack(c.Request.Context(), id)
-		if err != nil {
-			h.logger.Error("Error deleting track", slog.Int("id", id), slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting track"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"message": "Track deleted"})
-	}
-}
-
-func (h *TrackHandler) GetTracksWithPagination() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		minStr := c.DefaultQuery("min", "1")
-		maxStr := c.DefaultQuery("max", "10")
-
-		min, err := strconv.Atoi(minStr)
-		if err != nil || min < 1 {
-			h.logger.Error("Invalid pagination parameters", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pagination parameters"})
-			return
-		}
-
-		max, err := strconv.Atoi(maxStr)
-		if err != nil || max < 1 {
-			h.logger.Error("Invalid pagination parameters", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid pagination parameters"})
-			return
-		}
-
-		tracks, err := h.service.GetTracksWithPagination(c.Request.Context(), max, (min-1)*max)
-		if err != nil {
-			h.logger.Error("Error fetching tracks with pagination", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching tracks with pagination"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"tracks": tracks})
 	}
 }

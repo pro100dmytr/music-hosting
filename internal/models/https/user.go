@@ -1,4 +1,4 @@
-package models
+package https
 
 type User struct {
 	ID         int    `json:"id"`

@@ -3,10 +3,10 @@ package userutils
 import (
 	"errors"
 	"golang.org/x/crypto/bcrypt"
-	"music-hosting/internal/models"
+	"music-hosting/internal/models/services"
 )
 
-func ValidateUser(user *models.User) error {
+func ValidateUser(user *services.User) error {
 	if user.Login == "" {
 		return errors.New("login is required")
 	}

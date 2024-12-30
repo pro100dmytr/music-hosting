@@ -8,6 +8,7 @@ import (
 	"music-hosting/internal/http/playlist"
 	"music-hosting/internal/http/track"
 	"music-hosting/internal/http/user"
+	"music-hosting/internal/middleware"
 	"music-hosting/internal/repository"
 	"music-hosting/internal/service"
 	"os"
@@ -56,37 +57,48 @@ func Run(config string) {
 
 	router := gin.Default()
 
-	userRoutes := router.Group("/api/user")
+	router.POST("/login", userHandler.Login())
+
+	userRoutes := router.Group("/api")
 	{
-		userRoutes.GET("/getall", userHandler.GetAllUsers())
-		userRoutes.GET("/get/:id", userHandler.GetUserID())
-		userRoutes.GET("/getwith", userHandler.GetUserWithPagination())
-		userRoutes.POST("/create", userHandler.CreateUser())
-		userRoutes.PUT("/update/:id", userHandler.UpdateUser())
-		userRoutes.DELETE("/delete/:id", userHandler.DeleteUser())
+		userRoutes.GET("/users", userHandler.GetAllUsers())
+		userRoutes.GET("/users/:id", userHandler.GetUserID())
+		userRoutes.GET("/users?offset=1&limit=10", userHandler.GetUserWithPagination())
+		userRoutes.POST("/users", userHandler.CreateUser())
+		userRoutes.PUT("/users/:id", userHandler.UpdateUser())
+		userRoutes.DELETE("/users/:id", userHandler.DeleteUser())
 	}
 
-	trackRoutes := router.Group("/api/track")
+	authRoutes := router.Group("/")
+	authRoutes.Use(middleware.AuthMiddleware())
 	{
-		trackRoutes.GET("/getall", trackHandler.GetAllTracks())
-		trackRoutes.GET("/get/id/:id", trackHandler.GetTrackByID())
-		trackRoutes.GET("/get/name/:name", trackHandler.GetTrackByName())
-		trackRoutes.GET("/get/artist/:artist", trackHandler.GetTrackByArtist())
-		trackRoutes.GET("/getwith", trackHandler.GetTracksWithPagination())
-		trackRoutes.POST("/create", trackHandler.CreateTrack())
-		trackRoutes.PUT("/update/:id", trackHandler.UpdateTrack())
-		trackRoutes.DELETE("/delete/:id", trackHandler.DeleteTrack())
+		authRoutes.GET("/users", userHandler.GetAllUsers())
+		authRoutes.GET("/users/:id", userHandler.GetUserID())
+		authRoutes.PUT("/users/:id", userHandler.UpdateUser())
+		authRoutes.DELETE("/users/:id", userHandler.DeleteUser())
 	}
 
-	playlistRoutes := router.Group("/api/playlist")
+	trackRoutes := router.Group("/api")
 	{
-		playlistRoutes.GET("/getall", playlistHandler.GetAllPlaylists())
-		playlistRoutes.GET("/get/id/:id", playlistHandler.GetPlaylistByID())
-		playlistRoutes.GET("/get/name/:name", playlistHandler.GetPlaylistByName())
-		playlistRoutes.GET("/get/userid/:userid", playlistHandler.GetPlaylistByUserID())
-		playlistRoutes.POST("/create", playlistHandler.CreatePlaylist())
-		playlistRoutes.PUT("/update/:id", playlistHandler.UpdatePlaylist())
-		playlistRoutes.DELETE("/delete/:id", playlistHandler.DeletePlaylist())
+		trackRoutes.GET("/tracks", trackHandler.GetAllTracks())
+		trackRoutes.GET("/tracks/id/:id", trackHandler.GetTrackByID())
+		trackRoutes.GET("/tracks/name/:name", trackHandler.GetTrackByName())
+		trackRoutes.GET("/tracks/artist/:artist", trackHandler.GetTrackByArtist())
+		trackRoutes.GET("/tracks?offset=1&limit=10", trackHandler.GetTracksWithPagination())
+		trackRoutes.POST("/tracks", trackHandler.CreateTrack())
+		trackRoutes.PUT("/tracks/:id", trackHandler.UpdateTrack())
+		trackRoutes.DELETE("/tracks/:id", trackHandler.DeleteTrack())
+	}
+
+	playlistRoutes := router.Group("/api")
+	{
+		playlistRoutes.GET("/playlists", playlistHandler.GetAllPlaylists())
+		playlistRoutes.GET("/playlists/id/:id", playlistHandler.GetPlaylistByID())
+		playlistRoutes.GET("/playlists/name/:name", playlistHandler.GetPlaylistByName())
+		playlistRoutes.GET("/playlists/userid/:userid", playlistHandler.GetPlaylistByUserID())
+		playlistRoutes.POST("/playlists", playlistHandler.CreatePlaylist())
+		playlistRoutes.PUT("/playlists/:id", playlistHandler.UpdatePlaylist())
+		playlistRoutes.DELETE("/playlists/:id", playlistHandler.DeletePlaylist())
 	}
 
 	serverAddr := fmt.Sprintf(":%s", cfg.Server.Port)
@@ -94,5 +106,4 @@ func Run(config string) {
 		logger.Error("Failed to start server", slog.Any("error", err))
 		os.Exit(1)
 	}
-
 }
