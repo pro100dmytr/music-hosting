@@ -9,6 +9,7 @@ import (
 	"music-hosting/internal/models/repositorys"
 	"music-hosting/internal/models/services"
 	"music-hosting/internal/repository"
+	"music-hosting/pkg/utils/trackutils"
 	"strconv"
 )
 
@@ -25,6 +26,11 @@ func NewTrackService(trackRepo *repository.TrackStorage, logger *slog.Logger) *T
 }
 
 func (s *TrackService) CreateTrack(ctx context.Context, track *services.Track) error {
+	err := trackutils.ValidateTrack(track)
+	if err != nil {
+		return err
+	}
+
 	repoTrack := repositorys.Track{
 		Name:   track.Name,
 		Artist: track.Artist,
@@ -80,6 +86,11 @@ func (s *TrackService) GetAllTracks(ctx context.Context) ([]*services.Track, err
 }
 
 func (s *TrackService) UpdateTrack(ctx context.Context, id int, track *services.Track) (*services.Track, error) {
+	err := trackutils.ValidateTrack(track)
+	if err != nil {
+		return nil, err
+	}
+
 	trackRepo := repositorys.Track{
 		ID:     track.ID,
 		Name:   track.Name,
@@ -87,7 +98,7 @@ func (s *TrackService) UpdateTrack(ctx context.Context, id int, track *services.
 		URL:    track.URL,
 	}
 
-	err := s.trackRepo.Update(ctx, &trackRepo, id)
+	err = s.trackRepo.Update(ctx, &trackRepo, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, sql.ErrNoRows
