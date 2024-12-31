@@ -8,8 +8,6 @@ import (
 	"music-hosting/internal/models/https"
 	"music-hosting/internal/models/services"
 	"music-hosting/internal/service"
-	"music-hosting/pkg/utils/jwtutils"
-	"music-hosting/pkg/utils/userutils"
 	"net/http"
 	"strconv"
 )
@@ -31,6 +29,17 @@ type UserHandler struct {
 func NewHandler(service *service.UserService, logger *slog.Logger) *UserHandler {
 	return &UserHandler{service: service, logger: logger}
 }
+
+// @Summary Create a new user
+// @Description Create a new user with the provided information
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param user body https.User true "User information"
+// @Success 201 {object} map[string]interface{} "User created"
+// @Failure 400 {object} map[string]interface{} "Invalid request body"
+// @Failure 500 {object} map[string]interface{} "Failed to create user"
+// @Router /api/users [post]
 
 func (h *UserHandler) CreateUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -62,6 +71,17 @@ func (h *UserHandler) CreateUser() gin.HandlerFunc {
 		})
 	}
 }
+
+// @Summary Get user by ID
+// @Description Retrieve a user by their ID
+// @Tags users
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} https.User "User information"
+// @Failure 400 {object} map[string]interface{} "Invalid user ID"
+// @Failure 404 {object} map[string]interface{} "User not found"
+// @Failure 500 {object} map[string]interface{} "Failed to retrieve user"
+// @Router /api/users/{id} [get]
 
 func (h *UserHandler) GetUserID() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -97,6 +117,14 @@ func (h *UserHandler) GetUserID() gin.HandlerFunc {
 	}
 }
 
+// @Summary Get all users
+// @Description Retrieve a list of all users
+// @Tags users
+// @Produce json
+// @Success 200 {array} https.User "List of users"
+// @Failure 500 {object} map[string]interface{} "Failed to retrieve users"
+// @Router /api/users [get]
+
 func (h *UserHandler) GetAllUsers() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		users, err := h.service.GetAllUsers(c.Request.Context())
@@ -121,6 +149,19 @@ func (h *UserHandler) GetAllUsers() gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"users": usersHttp})
 	}
 }
+
+// @Summary Update a user
+// @Description Update a user's information by their ID
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param id path int true "User ID"
+// @Param user body https.User true "Updated user information"
+// @Success 200 {object} https.User "Updated user information"
+// @Failure 400 {object} map[string]interface{} "Invalid request body"
+// @Failure 404 {object} map[string]interface{} "User not found"
+// @Failure 500 {object} map[string]interface{} "Failed to update user"
+// @Router /api/users/{id} [put]
 
 func (h *UserHandler) UpdateUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -169,6 +210,17 @@ func (h *UserHandler) UpdateUser() gin.HandlerFunc {
 	}
 }
 
+// @Summary Delete a user
+// @Description Delete a user by their ID
+// @Tags users
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} map[string]interface{} "User deleted"
+// @Failure 400 {object} map[string]interface{} "Invalid user ID"
+// @Failure 404 {object} map[string]interface{} "User not found"
+// @Failure 500 {object} map[string]interface{} "Failed to delete user"
+// @Router /api/users/{id} [delete]
+
 func (h *UserHandler) DeleteUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("id"))
@@ -193,6 +245,16 @@ func (h *UserHandler) DeleteUser() gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "User deleted"})
 	}
 }
+
+// @Summary Get users with pagination
+// @Description Retrieve users with pagination
+// @Tags users
+// @Produce json
+// @Param offset query int false "Offset for pagination"
+// @Param limit query int false "Limit for pagination"
+// @Success 200 {array} https.User "List of users"
+// @Failure 500 {object} map[string]interface{} "Failed to retrieve users"
+// @Router /api/users [get]
 
 func (h *UserHandler) GetUserWithPagination() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -222,6 +284,17 @@ func (h *UserHandler) GetUserWithPagination() gin.HandlerFunc {
 	}
 }
 
+// @Summary User login
+// @Description Authenticate a user and return a token
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param credentials body https.User true "User credentials"
+// @Success 200 {object} map[string]string "Authentication token"
+// @Failure 400 {object} map[string]string "Invalid request body"
+// @Failure 401 {object} map[string]string "Invalid credentials"
+// @Router /api/users/login [post]
+
 func (h *UserHandler) Login() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var user https.User
@@ -232,22 +305,10 @@ func (h *UserHandler) Login() gin.HandlerFunc {
 			return
 		}
 
-		existingUser, err := h.service.GetUserByLogin(c.Request.Context(), user.Login)
+		token, err := h.service.GetToken(c.Request.Context(), user.Login, user.Password)
 		if err != nil {
 			h.logger.Error("User not found", slog.Any("error", err))
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-			return
-		}
-
-		if !userutils.CheckPasswordHash(user.Password, existingUser.Password) {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-			return
-		}
-
-		token, err := jwtutils.GenerateToken(existingUser.ID)
-		if err != nil {
-			h.logger.Error("Failed to generate token", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 			return
 		}
 

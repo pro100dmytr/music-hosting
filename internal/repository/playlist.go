@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"music-hosting/internal/config"
 	"music-hosting/internal/models/repositorys"
 	"music-hosting/pkg/database/postgresql"
@@ -27,9 +28,16 @@ func NewPlaylistStorage(cfg *config.Config) (*PlaylistStorage, error) {
 }
 
 func (s *PlaylistStorage) Create(ctx context.Context, playlist *repositorys.Playlist) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	const query = `INSERT INTO playlists (name, user_id, track_id) VALUES ($1, $2, $3) RETURNING id, created_at, updated_at`
 
-	err := s.db.QueryRowContext(
+	err = s.db.QueryRowContext(
 		ctx,
 		query,
 		playlist.Name,
@@ -44,10 +52,21 @@ func (s *PlaylistStorage) Create(ctx context.Context, playlist *repositorys.Play
 		return err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 
 func (s *PlaylistStorage) GetAll(ctx context.Context) ([]*repositorys.Playlist, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	const query = `SELECT id, name, user_id, track_id, created_at, updated_at FROM playlists`
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -75,14 +94,25 @@ func (s *PlaylistStorage) GetAll(ctx context.Context) ([]*repositorys.Playlist, 
 		return nil, err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return playlists, nil
 }
 
 func (s *PlaylistStorage) Get(ctx context.Context, id int) (*repositorys.Playlist, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	const query = `SELECT id, name, user_id, track_id, created_at, updated_at FROM playlists WHERE id = $1`
 
 	playlist := &repositorys.Playlist{}
-	err := s.db.QueryRowContext(ctx, query, id).Scan(
+	err = s.db.QueryRowContext(ctx, query, id).Scan(
 		&playlist.ID,
 		&playlist.Name,
 		&playlist.UserID,
@@ -96,10 +126,21 @@ func (s *PlaylistStorage) Get(ctx context.Context, id int) (*repositorys.Playlis
 		return nil, err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return playlist, nil
 }
 
 func (s *PlaylistStorage) GetByUserID(ctx context.Context, userID int) ([]*repositorys.Playlist, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	const query = `SELECT * FROM playlists WHERE user_id = $1`
 	rows, err := s.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -129,10 +170,21 @@ func (s *PlaylistStorage) GetByUserID(ctx context.Context, userID int) ([]*repos
 		return nil, err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return playlists, nil
 }
 
 func (s *PlaylistStorage) GetByName(ctx context.Context, name string) ([]*repositorys.Playlist, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	const query = `SELECT id, name, user_id, track_id, created_at, updated_at FROM playlists WHERE name = $1`
 	rows, err := s.db.QueryContext(ctx, query, name)
 	if err != nil {
@@ -162,10 +214,21 @@ func (s *PlaylistStorage) GetByName(ctx context.Context, name string) ([]*reposi
 		return nil, err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return playlists, nil
 }
 
 func (s *PlaylistStorage) Update(ctx context.Context, id int, playlist *repositorys.Playlist) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	const query = `UPDATE playlists SET name = $1, user_id = $2, track_id = $3, updated_at = NOW() WHERE id = $4`
 
 	result, err := s.db.ExecContext(ctx, query, playlist.Name, playlist.UserID, playlist.TrackID, id)
@@ -182,10 +245,21 @@ func (s *PlaylistStorage) Update(ctx context.Context, id int, playlist *reposito
 		return sql.ErrNoRows
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 
 func (s *PlaylistStorage) Delete(ctx context.Context, id int) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	const query = `DELETE FROM playlists WHERE id = $1`
 	result, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
@@ -199,6 +273,10 @@ func (s *PlaylistStorage) Delete(ctx context.Context, id int) error {
 
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil

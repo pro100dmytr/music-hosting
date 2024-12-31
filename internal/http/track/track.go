@@ -212,27 +212,27 @@ func (h *TrackHandler) GetTracksWithPagination() gin.HandlerFunc {
 func (h *TrackHandler) GetTrackByName() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Param("name")
-		track, err := h.service.GetTrackByName(c.Request.Context(), name)
+		tracks, err := h.service.GetTrackByName(c.Request.Context(), name)
 		if err != nil {
 			h.logger.Error("Error fetching track by name", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching track by name"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"track": track})
+		c.JSON(http.StatusOK, gin.H{"tracks": tracks})
 	}
 }
 
 func (h *TrackHandler) GetTrackByArtist() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		artist := c.Param("artist")
-		track, err := h.service.GetTrackByArtist(c.Request.Context(), artist)
+		tracks, err := h.service.GetTrackByArtist(c.Request.Context(), artist)
 		if err != nil {
-			h.logger.Error("Error fetching track by artist", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching track by artist"})
+			h.logger.Error("Error fetching tracks by artist", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching tracks by artist"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"track": track})
+		c.JSON(http.StatusOK, gin.H{"tracks": tracks})
 	}
 }

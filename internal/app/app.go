@@ -3,7 +3,10 @@ package app
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/swaggo/files"
+	"github.com/swaggo/gin-swagger"
 	"log/slog"
+	_ "music-hosting/docs"
 	config2 "music-hosting/internal/config"
 	"music-hosting/internal/http/playlist"
 	"music-hosting/internal/http/track"
@@ -57,9 +60,12 @@ func Run(config string) {
 
 	router := gin.Default()
 
-	router.POST("/login", userHandler.Login())
+	router.POST("/users/login", userHandler.Login())
+
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	userRoutes := router.Group("/api")
+	userRoutes.Use(middleware.AuthMiddleware())
 	{
 		userRoutes.GET("/users", userHandler.GetAllUsers())
 		userRoutes.GET("/users/:id", userHandler.GetUserID())
@@ -69,16 +75,8 @@ func Run(config string) {
 		userRoutes.DELETE("/users/:id", userHandler.DeleteUser())
 	}
 
-	authRoutes := router.Group("/")
-	authRoutes.Use(middleware.AuthMiddleware())
-	{
-		authRoutes.GET("/users", userHandler.GetAllUsers())
-		authRoutes.GET("/users/:id", userHandler.GetUserID())
-		authRoutes.PUT("/users/:id", userHandler.UpdateUser())
-		authRoutes.DELETE("/users/:id", userHandler.DeleteUser())
-	}
-
 	trackRoutes := router.Group("/api")
+	trackRoutes.Use(middleware.AuthMiddleware())
 	{
 		trackRoutes.GET("/tracks", trackHandler.GetAllTracks())
 		trackRoutes.GET("/tracks/id/:id", trackHandler.GetTrackByID())
@@ -91,6 +89,7 @@ func Run(config string) {
 	}
 
 	playlistRoutes := router.Group("/api")
+	playlistRoutes.Use(middleware.AuthMiddleware())
 	{
 		playlistRoutes.GET("/playlists", playlistHandler.GetAllPlaylists())
 		playlistRoutes.GET("/playlists/id/:id", playlistHandler.GetPlaylistByID())

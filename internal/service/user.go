@@ -10,6 +10,7 @@ import (
 	"music-hosting/internal/models/services"
 	"music-hosting/internal/repository"
 	"music-hosting/pkg/utils/convertutils"
+	"music-hosting/pkg/utils/jwtutils"
 	"music-hosting/pkg/utils/userutils"
 	"strconv"
 )
@@ -191,20 +192,25 @@ func (s *UserService) GetUsersWithPagination(ctx context.Context, limit, offset 
 	return users, nil
 }
 
-func (s *UserService) GetUserByLogin(ctx context.Context, login string) (*services.User, error) {
-	if login == "" {
-		return nil, fmt.Errorf("invalid login")
+func (s *UserService) GetToken(ctx context.Context, login string, password string) (string, error) {
+	if login == "" || password == "" {
+		return "", fmt.Errorf("invalid login or password")
 	}
 
 	user, err := s.userRepo.GetUserByLogin(ctx, login)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	users := &services.User{
-		Login:    user.Login,
-		Password: user.Password,
+	if !userutils.CheckPasswordHash(user.Password, password) {
+		return "", fmt.Errorf("invalid password")
 	}
 
-	return users, nil
+	token, err := jwtutils.GenerateToken(user.ID)
+	if err != nil {
+
+		return "", err
+	}
+
+	return token, nil
 }

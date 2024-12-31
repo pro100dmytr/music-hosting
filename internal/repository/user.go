@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"music-hosting/internal/config"
 	"music-hosting/internal/models/repositorys"
 	"music-hosting/pkg/database/postgresql"
@@ -27,9 +28,16 @@ func NewUserStorage(cfg *config.Config) (*UserStorage, error) {
 }
 
 func (s *UserStorage) Create(ctx context.Context, user *repositorys.User) (int, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	const query = `INSERT INTO users (login, email, password, playlist_id) VALUES ($1, $2, $3, $4) RETURNING id`
 	var id int
-	err := s.db.QueryRowContext(
+	err = s.db.QueryRowContext(
 		ctx,
 		query,
 		user.Login,
@@ -42,17 +50,27 @@ func (s *UserStorage) Create(ctx context.Context, user *repositorys.User) (int, 
 		return 0, err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return id, nil
 }
 
 func (s *UserStorage) Get(ctx context.Context, id int) (*repositorys.User, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
 	const query = `
         SELECT id, login, email, password, playlist_id 
         FROM users 
         WHERE id = $1`
 
 	user := &repositorys.User{}
-	err := s.db.QueryRowContext(ctx, query, id).Scan(
+	err = s.db.QueryRowContext(ctx, query, id).Scan(
 		&user.ID,
 		&user.Login,
 		&user.Email,
@@ -66,11 +84,21 @@ func (s *UserStorage) Get(ctx context.Context, id int) (*repositorys.User, error
 		return nil, err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	user.ID = id
 	return user, nil
 }
 
 func (s *UserStorage) GetAll(ctx context.Context) ([]*repositorys.User, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
 	const query = `
         SELECT id, login, email, password, playlist_id 
         FROM users`
@@ -96,10 +124,20 @@ func (s *UserStorage) GetAll(ctx context.Context) ([]*repositorys.User, error) {
 		users = append(users, user)
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return users, rows.Err()
 }
 
 func (s *UserStorage) Update(ctx context.Context, user *repositorys.User, id int) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
 	const query = `
         UPDATE users 
         SET login = $1, email = $2, password = $3, playlist_id = $4 
@@ -127,10 +165,20 @@ func (s *UserStorage) Update(ctx context.Context, user *repositorys.User, id int
 		return sql.ErrNoRows
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 
 func (s *UserStorage) Delete(ctx context.Context, id int) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
 	const query = `DELETE FROM users WHERE id = $1`
 
 	result, err := s.db.ExecContext(ctx, query, id)
@@ -147,10 +195,21 @@ func (s *UserStorage) Delete(ctx context.Context, id int) error {
 		return sql.ErrNoRows
 	}
 
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	return nil
 }
 
 func (s *UserStorage) GetUsers(ctx context.Context, offset, limit int) ([]*repositorys.User, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	const query = `
         SELECT id, login, email, password, playlist_id 
         FROM users 
@@ -178,23 +237,34 @@ func (s *UserStorage) GetUsers(ctx context.Context, offset, limit int) ([]*repos
 		users = append(users, user)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, err
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return users, nil
+	return users, rows.Err()
 }
 
 func (s *UserStorage) GetUserByLogin(ctx context.Context, login string) (*repositorys.User, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	defer tx.Rollback()
+
 	user := &repositorys.User{}
 
 	query := `SELECT id, login, password FROM users WHERE login = $1`
-	err := s.db.QueryRowContext(ctx, query, login).Scan(&user.ID, &user.Login, &user.Password)
+	err = s.db.QueryRowContext(ctx, query, login).Scan(&user.ID, &user.Login, &user.Password)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
 		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return user, nil
