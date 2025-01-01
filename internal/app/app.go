@@ -79,7 +79,7 @@ func Run(config string) {
 	trackRoutes.Use(middleware.AuthMiddleware())
 	{
 		trackRoutes.GET("/tracks", trackHandler.GetAllTracks())
-		trackRoutes.GET("/tracks/id/:id", trackHandler.GetTrackByID())
+		trackRoutes.GET("/tracks/:id", trackHandler.GetTrackByID())
 		trackRoutes.GET("/tracks/name/:name", trackHandler.GetTrackByName())
 		trackRoutes.GET("/tracks/artist/:artist", trackHandler.GetTrackByArtist())
 		trackRoutes.GET("/tracks?offset=1&limit=10", trackHandler.GetTracksWithPagination())
@@ -92,9 +92,9 @@ func Run(config string) {
 	playlistRoutes.Use(middleware.AuthMiddleware())
 	{
 		playlistRoutes.GET("/playlists", playlistHandler.GetAllPlaylists())
-		playlistRoutes.GET("/playlists/id/:id", playlistHandler.GetPlaylistByID())
+		playlistRoutes.GET("/playlists/:id", playlistHandler.GetPlaylistByID())
 		playlistRoutes.GET("/playlists/name/:name", playlistHandler.GetPlaylistByName())
-		playlistRoutes.GET("/playlists/userid/:userid", playlistHandler.GetPlaylistByUserID())
+		playlistRoutes.GET("/playlists/userid/:id", playlistHandler.GetPlaylistByUserID())
 		playlistRoutes.POST("/playlists", playlistHandler.CreatePlaylist())
 		playlistRoutes.PUT("/playlists/:id", playlistHandler.UpdatePlaylist())
 		playlistRoutes.DELETE("/playlists/:id", playlistHandler.DeletePlaylist())

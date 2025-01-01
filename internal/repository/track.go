@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"music-hosting/internal/config"
+	"music-hosting/internal/database/postgresql"
 	"music-hosting/internal/models/repositorys"
-	"music-hosting/pkg/database/postgresql"
 )
 
 type TrackStorage struct {
@@ -28,22 +28,11 @@ func NewTrackStorage(cfg *config.Config) (*TrackStorage, error) {
 }
 
 func (s *TrackStorage) Create(ctx context.Context, track *repositorys.Track) (int, error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return 0, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer tx.Rollback()
-
 	const query = `INSERT INTO tracks (name, artist, url) VALUES ($1, $2, $3) RETURNING id`
 	var id int
-	err = s.db.QueryRowContext(ctx, query, track.Name, track.Artist, track.URL).Scan(&id)
+	err := s.db.QueryRowContext(ctx, query, track.Name, track.Artist, track.URL).Scan(&id)
 	if err != nil {
 		return 0, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	track.ID = id
@@ -51,17 +40,10 @@ func (s *TrackStorage) Create(ctx context.Context, track *repositorys.Track) (in
 }
 
 func (s *TrackStorage) Get(ctx context.Context, id int) (*repositorys.Track, error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer tx.Rollback()
-
 	const query = `SELECT * FROM tracks WHERE id = $1`
 
 	track := &repositorys.Track{}
-	err = s.db.QueryRowContext(ctx, query, id).Scan(
+	err := s.db.QueryRowContext(ctx, query, id).Scan(
 		&track.ID,
 		&track.Name,
 		&track.Artist,
@@ -74,21 +56,11 @@ func (s *TrackStorage) Get(ctx context.Context, id int) (*repositorys.Track, err
 		return nil, err
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
 	track.ID = id
 	return track, nil
 }
 
 func (s *TrackStorage) GetAll(ctx context.Context) ([]*repositorys.Track, error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer tx.Rollback()
 	const query = `SELECT * FROM tracks`
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -110,21 +82,10 @@ func (s *TrackStorage) GetAll(ctx context.Context) ([]*repositorys.Track, error)
 		tracks = append(tracks, track)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
 	return tracks, rows.Err()
 }
 
 func (s *TrackStorage) GetForName(ctx context.Context, name string) ([]*repositorys.Track, error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer tx.Rollback()
-
 	const query = `SELECT * FROM tracks WHERE name = $1`
 	rows, err := s.db.QueryContext(ctx, query, name)
 	if err != nil {
@@ -146,21 +107,10 @@ func (s *TrackStorage) GetForName(ctx context.Context, name string) ([]*reposito
 		tracks = append(tracks, track)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
 	return tracks, rows.Err()
 }
 
 func (s *TrackStorage) GetForArtist(ctx context.Context, artist string) ([]*repositorys.Track, error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer tx.Rollback()
-
 	const query = `SELECT * FROM tracks WHERE artist = $1`
 	rows, err := s.db.QueryContext(ctx, query, artist)
 	if err != nil {
@@ -180,10 +130,6 @@ func (s *TrackStorage) GetForArtist(ctx context.Context, artist string) ([]*repo
 			return nil, err
 		}
 		tracks = append(tracks, track)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return tracks, rows.Err()
@@ -250,13 +196,6 @@ func (s *TrackStorage) Delete(ctx context.Context, id int) error {
 }
 
 func (s *TrackStorage) GetTracks(ctx context.Context, offset, limit int) ([]*repositorys.Track, error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer tx.Rollback()
-
 	const query = `SELECT id, name, artist, url FROM tracks OFFSET $1 LIMIT $2`
 
 	rows, err := s.db.QueryContext(ctx, query, offset, limit)
@@ -277,10 +216,6 @@ func (s *TrackStorage) GetTracks(ctx context.Context, offset, limit int) ([]*rep
 			return nil, err
 		}
 		tracks = append(tracks, track)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return tracks, rows.Err()

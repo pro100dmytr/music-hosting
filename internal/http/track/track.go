@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"log/slog"
+	"music-hosting/internal/models/dto"
 	"music-hosting/internal/models/https"
 	"music-hosting/internal/models/services"
 	"music-hosting/internal/service"
@@ -57,7 +58,11 @@ func (h *TrackHandler) CreateTrack() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"message": "Created track"})
+		message := dto.MessageResponse{
+			Message: "Created track",
+		}
+
+		c.JSON(http.StatusCreated, message)
 	}
 }
 
@@ -84,14 +89,14 @@ func (h *TrackHandler) GetTrackByID() gin.HandlerFunc {
 			return
 		}
 
-		trackHttp := https.Track{
+		trackResponse := dto.TrackResponse{
 			ID:     track.ID,
 			Name:   track.Name,
 			Artist: track.Artist,
 			URL:    track.URL,
 		}
 
-		c.JSON(http.StatusOK, gin.H{"track": trackHttp})
+		c.JSON(http.StatusOK, trackResponse)
 	}
 }
 
@@ -104,18 +109,19 @@ func (h *TrackHandler) GetAllTracks() gin.HandlerFunc {
 			return
 		}
 
-		var tracksHttp []https.Track
+		var tracksResponse []dto.TrackResponse
 		for _, track := range tracks {
-			trackHttp := https.Track{
+			trackResponse := dto.TrackResponse{
 				ID:     track.ID,
 				Name:   track.Name,
 				Artist: track.Artist,
 				URL:    track.URL,
 			}
-			tracksHttp = append(tracksHttp, trackHttp)
+
+			tracksResponse = append(tracksResponse, trackResponse)
 		}
 
-		c.JSON(http.StatusOK, gin.H{"tracks": tracksHttp})
+		c.JSON(http.StatusOK, tracksResponse)
 	}
 }
 
@@ -150,14 +156,14 @@ func (h *TrackHandler) UpdateTrack() gin.HandlerFunc {
 			return
 		}
 
-		trackHttp := https.Track{
+		trackResponse := dto.TrackResponse{
 			ID:     updatedTrack.ID,
 			Name:   updatedTrack.Name,
 			Artist: updatedTrack.Artist,
 			URL:    updatedTrack.URL,
 		}
 
-		c.JSON(http.StatusOK, gin.H{"track": trackHttp})
+		c.JSON(http.StatusOK, gin.H{"track": trackResponse})
 	}
 }
 
@@ -178,7 +184,11 @@ func (h *TrackHandler) DeleteTrack() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Track deleted successfully"})
+		message := dto.MessageResponse{
+			Message: "Deleted track",
+		}
+
+		c.JSON(http.StatusOK, message)
 	}
 }
 
@@ -194,18 +204,19 @@ func (h *TrackHandler) GetTracksWithPagination() gin.HandlerFunc {
 			return
 		}
 
-		var tracksHttp []https.Track
+		var tracksResponse []dto.TrackResponse
 		for _, track := range tracks {
-			trackHttp := https.Track{
+			trackResponse := dto.TrackResponse{
 				ID:     track.ID,
 				Name:   track.Name,
 				Artist: track.Artist,
 				URL:    track.URL,
 			}
-			tracksHttp = append(tracksHttp, trackHttp)
+
+			tracksResponse = append(tracksResponse, trackResponse)
 		}
 
-		c.JSON(http.StatusOK, gin.H{"tracks": tracksHttp})
+		c.JSON(http.StatusOK, tracksResponse)
 	}
 }
 
@@ -219,7 +230,19 @@ func (h *TrackHandler) GetTrackByName() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"tracks": tracks})
+		var tracksResponse []dto.TrackResponse
+		for _, track := range tracks {
+			trackResponse := dto.TrackResponse{
+				ID:     track.ID,
+				Name:   track.Name,
+				Artist: track.Artist,
+				URL:    track.URL,
+			}
+
+			tracksResponse = append(tracksResponse, trackResponse)
+		}
+
+		c.JSON(http.StatusOK, tracksResponse)
 	}
 }
 
@@ -233,6 +256,18 @@ func (h *TrackHandler) GetTrackByArtist() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"tracks": tracks})
+		var tracksResponse []dto.TrackResponse
+		for _, track := range tracks {
+			trackResponse := dto.TrackResponse{
+				ID:     track.ID,
+				Name:   track.Name,
+				Artist: track.Artist,
+				URL:    track.URL,
+			}
+
+			tracksResponse = append(tracksResponse, trackResponse)
+		}
+
+		c.JSON(http.StatusOK, tracksResponse)
 	}
 }

@@ -5,5 +5,6 @@ type User struct {
 	Login      string
 	Email      string
 	Password   string
-	PlaylistID string
+	PlaylistID []int
+	Salt       string
 }

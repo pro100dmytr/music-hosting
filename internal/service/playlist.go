@@ -9,7 +9,6 @@ import (
 	"music-hosting/internal/models/repositorys"
 	"music-hosting/internal/models/services"
 	"music-hosting/internal/repository"
-	"music-hosting/pkg/utils/convertutils"
 )
 
 type PlaylistService struct {
@@ -29,15 +28,22 @@ func (s *PlaylistService) CreatePlaylist(ctx context.Context, playlist *services
 		return fmt.Errorf("playlist name is required")
 	}
 
-	repoPlaylist := repositorys.Playlist{
-		Name:    playlist.Name,
-		UserID:  playlist.UserID,
-		TrackID: convertutils.IntSliceConvertIntoString(playlist.TrackID),
+	repoPlaylist := &repositorys.Playlist{
+		Name:     playlist.Name,
+		UserID:   playlist.UserID,
+		TracksID: playlist.TracksID,
 	}
 
-	err := s.repo.Create(ctx, &repoPlaylist)
+	err := s.repo.Create(ctx, repoPlaylist)
 	if err != nil {
 		return err
+	}
+
+	if len(playlist.TracksID) > 0 {
+		err = s.repo.AddTracksToPlaylist(ctx, playlist.ID, playlist.TracksID)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -52,19 +58,16 @@ func (s *PlaylistService) GetPlaylistByID(ctx context.Context, id int) (*service
 		return nil, err
 	}
 
-	trackID := []int{}
-	if repoPlaylist.TrackID != "" {
-		trackID, err = convertutils.StringConvertIntoIntSlice(repoPlaylist.TrackID)
-		if err != nil {
-			return nil, err
-		}
+	tracksID, err := s.repo.GetTracksByPlaylistID(ctx, id)
+	if err != nil {
+		return nil, err
 	}
 
 	playlist := &services.Playlist{
 		ID:        repoPlaylist.ID,
 		Name:      repoPlaylist.Name,
 		UserID:    repoPlaylist.UserID,
-		TrackID:   trackID,
+		TracksID:  tracksID,
 		CreatedAt: repoPlaylist.CreatedAt,
 		UpdatedAt: repoPlaylist.UpdatedAt,
 	}
@@ -80,19 +83,16 @@ func (s *PlaylistService) GetAllPlaylists(ctx context.Context) ([]*services.Play
 
 	var playlists []*services.Playlist
 	for _, repoPlaylist := range repoPlaylists {
-		trackID := []int{}
-		if repoPlaylist.TrackID != "" {
-			trackID, err = convertutils.StringConvertIntoIntSlice(repoPlaylist.TrackID)
-			if err != nil {
-				return nil, err
-			}
+		tracksID, err := s.repo.GetTracksByPlaylistID(ctx, repoPlaylist.ID)
+		if err != nil {
+			return nil, err
 		}
 
 		playlist := &services.Playlist{
 			ID:        repoPlaylist.ID,
 			Name:      repoPlaylist.Name,
 			UserID:    repoPlaylist.UserID,
-			TrackID:   trackID,
+			TracksID:  tracksID,
 			CreatedAt: repoPlaylist.CreatedAt,
 			UpdatedAt: repoPlaylist.UpdatedAt,
 		}
@@ -114,19 +114,16 @@ func (s *PlaylistService) GetPlaylistByName(ctx context.Context, name string) ([
 
 	var playlists []*services.Playlist
 	for _, repoPlaylist := range repoPlaylists {
-		trackID := []int{}
-		if repoPlaylist.TrackID != "" {
-			trackID, err = convertutils.StringConvertIntoIntSlice(repoPlaylist.TrackID)
-			if err != nil {
-				return nil, err
-			}
+		tracksID, err := s.repo.GetTracksByPlaylistID(ctx, repoPlaylist.ID)
+		if err != nil {
+			return nil, err
 		}
 
 		playlist := &services.Playlist{
 			ID:        repoPlaylist.ID,
 			Name:      repoPlaylist.Name,
 			UserID:    repoPlaylist.UserID,
-			TrackID:   trackID,
+			TracksID:  tracksID,
 			CreatedAt: repoPlaylist.CreatedAt,
 			UpdatedAt: repoPlaylist.UpdatedAt,
 		}
@@ -148,19 +145,16 @@ func (s *PlaylistService) GetPlaylistByUserID(ctx context.Context, userID int) (
 
 	var playlists []*services.Playlist
 	for _, repoPlaylist := range repoPlaylists {
-		trackID := []int{}
-		if repoPlaylist.TrackID != "" {
-			trackID, err = convertutils.StringConvertIntoIntSlice(repoPlaylist.TrackID)
-			if err != nil {
-				return nil, err
-			}
+		tracksID, err := s.repo.GetTracksByPlaylistID(ctx, repoPlaylist.ID)
+		if err != nil {
+			return nil, err
 		}
 
 		playlist := &services.Playlist{
 			ID:        repoPlaylist.ID,
 			Name:      repoPlaylist.Name,
 			UserID:    repoPlaylist.UserID,
-			TrackID:   trackID,
+			TracksID:  tracksID,
 			CreatedAt: repoPlaylist.CreatedAt,
 			UpdatedAt: repoPlaylist.UpdatedAt,
 		}
@@ -172,14 +166,22 @@ func (s *PlaylistService) GetPlaylistByUserID(ctx context.Context, userID int) (
 }
 
 func (s *PlaylistService) UpdatePlaylist(ctx context.Context, id int, playlist *services.Playlist) (*services.Playlist, error) {
-	stringIDString := convertutils.IntSliceConvertIntoString(playlist.TrackID)
+	if playlist.Name == "" {
+		return nil, fmt.Errorf("playlist name is required")
+	}
+
 	repoPlaylist := &repositorys.Playlist{
-		Name:    playlist.Name,
-		UserID:  playlist.UserID,
-		TrackID: stringIDString,
+		Name:     playlist.Name,
+		UserID:   playlist.UserID,
+		TracksID: playlist.TracksID,
 	}
 
 	err := s.repo.Update(ctx, id, repoPlaylist)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.repo.UpdatePlaylistTracks(ctx, id, playlist.TracksID)
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +196,11 @@ func (s *PlaylistService) DeletePlaylist(ctx context.Context, id int) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return sql.ErrNoRows
 		}
+		return err
+	}
+
+	err = s.repo.RemoveTracksFromPlaylist(ctx, id, []int{})
+	if err != nil {
 		return err
 	}
 

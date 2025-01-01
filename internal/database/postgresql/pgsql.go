@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/lib/pq"
+	"github.com/pressly/goose/v3"
+	"log/slog"
 	"music-hosting/internal/config"
 )
 
@@ -27,11 +29,11 @@ func OpenConnection(cfg *config.Config) (*sql.DB, error) {
 		return nil, err
 	}
 
-	//err = goose.Up(db, "db\\migrations")
-	//if err != nil {
-	//	slog.Error("Failed to run migrations", err)
-	//	return nil, err
-	//}
+	err = goose.Up(db, "db\\migrations")
+	if err != nil {
+		slog.Error("Failed to run migrations", err)
+		return nil, err
+	}
 
 	return db, nil
 }

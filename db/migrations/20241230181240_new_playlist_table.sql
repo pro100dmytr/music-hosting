@@ -6,7 +6,6 @@ CREATE TABLE IF NOT EXISTS playlists (
     user_id INTEGER NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    track_id INTEGER[],
     FOREIGN KEY (user_id) REFERENCES users(id)
     );
 -- +goose StatementEnd

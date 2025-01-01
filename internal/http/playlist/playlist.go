@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"log/slog"
+	"music-hosting/internal/models/dto"
 	"music-hosting/internal/models/https"
 	"music-hosting/internal/models/services"
 	"music-hosting/internal/service"
@@ -41,9 +42,8 @@ func (h *Handler) CreatePlaylist() gin.HandlerFunc {
 		}
 
 		playlistServ := services.Playlist{
-			Name:    playlist.Name,
-			UserID:  playlist.UserID,
-			TrackID: playlist.TrackID,
+			Name:   playlist.Name,
+			UserID: playlist.UserID,
 		}
 
 		err := h.service.CreatePlaylist(c.Request.Context(), &playlistServ)
@@ -53,7 +53,11 @@ func (h *Handler) CreatePlaylist() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"message": "Playlist created"})
+		message := dto.MessageResponse{
+			Message: "Created playlist",
+		}
+
+		c.JSON(http.StatusCreated, message)
 	}
 }
 
@@ -80,16 +84,16 @@ func (h *Handler) GetPlaylistByID() gin.HandlerFunc {
 			return
 		}
 
-		playlistHttp := https.Playlist{
+		playlistResponse := dto.PlaylistResponse{
 			ID:        playlist.ID,
 			Name:      playlist.Name,
 			UserID:    playlist.UserID,
-			TrackID:   playlist.TrackID,
+			TrackID:   playlist.TracksID,
 			CreatedAt: playlist.CreatedAt,
 			UpdatedAt: playlist.UpdatedAt,
 		}
 
-		c.JSON(http.StatusOK, playlistHttp)
+		c.JSON(http.StatusOK, playlistResponse)
 	}
 }
 
@@ -102,21 +106,21 @@ func (h *Handler) GetAllPlaylists() gin.HandlerFunc {
 			return
 		}
 
-		var playlistsHttp []https.Playlist
+		var playlistsResponse []dto.PlaylistResponse
 		for _, playlist := range playlists {
-			playlistHttp := https.Playlist{
+			playlistResponse := dto.PlaylistResponse{
 				ID:        playlist.ID,
 				Name:      playlist.Name,
 				UserID:    playlist.UserID,
-				TrackID:   playlist.TrackID,
+				TrackID:   playlist.TracksID,
 				CreatedAt: playlist.CreatedAt,
 				UpdatedAt: playlist.UpdatedAt,
 			}
 
-			playlistsHttp = append(playlistsHttp, playlistHttp)
+			playlistsResponse = append(playlistsResponse, playlistResponse)
 		}
 
-		c.JSON(http.StatusOK, playlistsHttp)
+		c.JSON(http.StatusOK, playlistsResponse)
 	}
 }
 
@@ -131,20 +135,21 @@ func (h *Handler) GetPlaylistByName() gin.HandlerFunc {
 			return
 		}
 
-		var playlistsHttp []https.Playlist
+		var playlistsResponse []dto.PlaylistResponse
 		for _, playlist := range playlists {
-			playlistHttp := https.Playlist{
+			playlistResponse := dto.PlaylistResponse{
 				ID:        playlist.ID,
 				Name:      playlist.Name,
 				UserID:    playlist.UserID,
-				TrackID:   playlist.TrackID,
+				TrackID:   playlist.TracksID,
 				CreatedAt: playlist.CreatedAt,
 				UpdatedAt: playlist.UpdatedAt,
 			}
 
-			playlistsHttp = append(playlistsHttp, playlistHttp)
+			playlistsResponse = append(playlistsResponse, playlistResponse)
 		}
-		c.JSON(http.StatusOK, playlistsHttp)
+
+		c.JSON(http.StatusOK, playlistsResponse)
 	}
 }
 
@@ -165,21 +170,21 @@ func (h *Handler) GetPlaylistByUserID() gin.HandlerFunc {
 			return
 		}
 
-		var playlistsHttp []https.Playlist
+		var playlistsResponse []dto.PlaylistResponse
 		for _, playlist := range playlists {
-			playlistHttp := https.Playlist{
+			playlistResponse := dto.PlaylistResponse{
 				ID:        playlist.ID,
 				Name:      playlist.Name,
 				UserID:    playlist.UserID,
-				TrackID:   playlist.TrackID,
+				TrackID:   playlist.TracksID,
 				CreatedAt: playlist.CreatedAt,
 				UpdatedAt: playlist.UpdatedAt,
 			}
 
-			playlistsHttp = append(playlistsHttp, playlistHttp)
+			playlistsResponse = append(playlistsResponse, playlistResponse)
 		}
 
-		c.JSON(http.StatusOK, playlistsHttp)
+		c.JSON(http.StatusOK, playlistsResponse)
 	}
 }
 
@@ -203,7 +208,7 @@ func (h *Handler) UpdatePlaylist() gin.HandlerFunc {
 		playlistServ := services.Playlist{
 			Name:      playlist.Name,
 			UserID:    playlist.UserID,
-			TrackID:   playlist.TrackID,
+			TracksID:  playlist.TrackID,
 			CreatedAt: playlist.CreatedAt,
 			UpdatedAt: playlist.UpdatedAt,
 		}
@@ -215,16 +220,16 @@ func (h *Handler) UpdatePlaylist() gin.HandlerFunc {
 			return
 		}
 
-		playlistHttp := https.Playlist{
+		playlistResponse := dto.PlaylistResponse{
 			ID:        updatedPlaylist.ID,
 			Name:      updatedPlaylist.Name,
 			UserID:    updatedPlaylist.UserID,
-			TrackID:   updatedPlaylist.TrackID,
+			TrackID:   updatedPlaylist.TracksID,
 			CreatedAt: updatedPlaylist.CreatedAt,
 			UpdatedAt: updatedPlaylist.UpdatedAt,
 		}
 
-		c.JSON(http.StatusOK, playlistHttp)
+		c.JSON(http.StatusOK, playlistResponse)
 	}
 }
 
@@ -250,6 +255,10 @@ func (h *Handler) DeletePlaylist() gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"message": "Playlist deleted"})
+		message := dto.MessageResponse{
+			Message: "Deleted playlist",
+		}
+
+		c.JSON(http.StatusOK, message)
 	}
 }

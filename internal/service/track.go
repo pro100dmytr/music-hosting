@@ -9,7 +9,7 @@ import (
 	"music-hosting/internal/models/repositorys"
 	"music-hosting/internal/models/services"
 	"music-hosting/internal/repository"
-	"music-hosting/pkg/utils/trackutils"
+	"music-hosting/internal/utils/trackutils"
 	"strconv"
 )
 

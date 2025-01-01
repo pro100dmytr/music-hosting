@@ -9,9 +9,8 @@ import (
 	"music-hosting/internal/models/repositorys"
 	"music-hosting/internal/models/services"
 	"music-hosting/internal/repository"
-	"music-hosting/pkg/utils/convertutils"
-	"music-hosting/pkg/utils/jwtutils"
-	"music-hosting/pkg/utils/userutils"
+	"music-hosting/internal/utils/jwtutils"
+	"music-hosting/internal/utils/userutils"
 	"strconv"
 )
 
@@ -33,7 +32,7 @@ func (s *UserService) CreateUser(ctx context.Context, user *services.User) error
 		return err
 	}
 
-	hashedPassword, err := userutils.HashPassword(user.Password)
+	hashedPassword, salt, err := userutils.HashPassword(user.Password)
 	if err != nil {
 		return err
 	}
@@ -43,12 +42,20 @@ func (s *UserService) CreateUser(ctx context.Context, user *services.User) error
 		Login:      user.Login,
 		Email:      user.Email,
 		Password:   hashedPassword,
-		PlaylistID: convertutils.IntSliceConvertIntoString(user.PlaylistID),
+		PlaylistID: user.PlaylistID,
+		Salt:       salt,
 	}
 
 	id, err := s.userRepo.Create(ctx, &repoUser)
 	if err != nil {
 		return err
+	}
+
+	if len(user.PlaylistID) > 0 {
+		err = s.userRepo.AddPlaylistsToUser(ctx, user.ID, user.PlaylistID)
+		if err != nil {
+			return err
+		}
 	}
 
 	user.ID = id
@@ -64,20 +71,16 @@ func (s *UserService) GetUser(ctx context.Context, id int) (*services.User, erro
 		return nil, err
 	}
 
-	playlistID := []int{}
-	if repoUser.PlaylistID != "" {
-		playlistID, err = convertutils.StringConvertIntoIntSlice(repoUser.PlaylistID)
-		if err != nil {
-			return nil, err
-		}
+	playlistsID, err := s.userRepo.GetPlaylistsForUser(ctx, repoUser.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	user := &services.User{
 		ID:         repoUser.ID,
 		Login:      repoUser.Login,
 		Email:      repoUser.Email,
-		Password:   repoUser.Password,
-		PlaylistID: playlistID,
+		PlaylistID: playlistsID,
 	}
 
 	return user, nil
@@ -91,20 +94,16 @@ func (s *UserService) GetAllUsers(ctx context.Context) ([]*services.User, error)
 
 	var users []*services.User
 	for _, repoUser := range repoUsers {
-		playlistID := []int{}
-		if repoUser.PlaylistID != "" {
-			playlistID, err = convertutils.StringConvertIntoIntSlice(repoUser.PlaylistID)
-			if err != nil {
-				return nil, err
-			}
+		playlistsID, err := s.userRepo.GetPlaylistsForUser(ctx, repoUser.ID)
+		if err != nil {
+			return nil, err
 		}
 
 		user := &services.User{
 			ID:         repoUser.ID,
 			Login:      repoUser.Login,
 			Email:      repoUser.Email,
-			Password:   repoUser.Password,
-			PlaylistID: playlistID,
+			PlaylistID: playlistsID,
 		}
 		users = append(users, user)
 	}
@@ -118,19 +117,18 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, user *services.Use
 		return nil, err
 	}
 
-	hashedPassword, err := userutils.HashPassword(user.Password)
+	hashedPassword, salt, err := userutils.HashPassword(user.Password)
 	if err != nil {
 		return nil, err
 	}
 
-	playlistIDString := convertutils.IntSliceConvertIntoString(user.PlaylistID)
 	repoUser := &repositorys.User{
 		Login:      user.Login,
 		Email:      user.Email,
 		Password:   hashedPassword,
-		PlaylistID: playlistIDString,
+		PlaylistID: user.PlaylistID,
+		Salt:       salt,
 	}
-
 	err = s.userRepo.Update(ctx, repoUser, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -138,6 +136,8 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, user *services.Use
 		}
 		return nil, err
 	}
+
+	err = s.userRepo.UpdatePlaylistsForUser(ctx, id, repoUser.PlaylistID)
 
 	user.ID = id
 	user.Password = hashedPassword
@@ -150,6 +150,11 @@ func (s *UserService) DeleteUser(ctx context.Context, id int) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			return sql.ErrNoRows
 		}
+		return err
+	}
+
+	err = s.userRepo.RemovePlaylistsFromUser(ctx, id, []int{})
+	if err != nil {
 		return err
 	}
 
@@ -174,17 +179,11 @@ func (s *UserService) GetUsersWithPagination(ctx context.Context, limit, offset 
 
 	var users []*services.User
 	for _, repoUser := range repoUsers {
-		playlistID, err := convertutils.StringConvertIntoIntSlice(repoUser.PlaylistID)
-		if err != nil {
-			return nil, err
-		}
-
 		user := &services.User{
 			ID:         repoUser.ID,
 			Login:      repoUser.Login,
 			Email:      repoUser.Email,
-			Password:   repoUser.Password,
-			PlaylistID: playlistID,
+			PlaylistID: repoUser.PlaylistID,
 		}
 		users = append(users, user)
 	}
@@ -202,13 +201,13 @@ func (s *UserService) GetToken(ctx context.Context, login string, password strin
 		return "", err
 	}
 
-	if !userutils.CheckPasswordHash(user.Password, password) {
+	isValidPassword, err := userutils.CheckPassword(password, user.Password, user.Salt)
+	if err != nil || !isValidPassword {
 		return "", fmt.Errorf("invalid password")
 	}
 
 	token, err := jwtutils.GenerateToken(user.ID)
 	if err != nil {
-
 		return "", err
 	}
 

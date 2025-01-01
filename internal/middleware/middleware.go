@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"github.com/gin-gonic/gin"
-	"music-hosting/pkg/utils/jwtutils"
+	"music-hosting/internal/utils/jwtutils"
 	"net/http"
 	"strings"
 )
