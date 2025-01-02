@@ -22,6 +22,10 @@ type Handler interface {
 	GetTrackWithPagination() gin.HandlerFunc
 	UpdateTrack() gin.HandlerFunc
 	DeleteTrack() gin.HandlerFunc
+	AddLike() gin.HandlerFunc
+	RemoveLike() gin.HandlerFunc
+	AddDislike() gin.HandlerFunc
+	RemoveDislike() gin.HandlerFunc
 }
 
 type TrackHandler struct {
@@ -46,9 +50,11 @@ func (h *TrackHandler) CreateTrack() gin.HandlerFunc {
 		}
 
 		trackServ := services.Track{
-			Name:   track.Name,
-			Artist: track.Artist,
-			URL:    track.URL,
+			Name:     track.Name,
+			Artist:   track.Artist,
+			URL:      track.URL,
+			Likes:    track.Likes,
+			Dislikes: track.Dislikes,
 		}
 
 		err := h.service.CreateTrack(c.Request.Context(), &trackServ)
@@ -90,10 +96,12 @@ func (h *TrackHandler) GetTrackByID() gin.HandlerFunc {
 		}
 
 		trackResponse := dto.TrackResponse{
-			ID:     track.ID,
-			Name:   track.Name,
-			Artist: track.Artist,
-			URL:    track.URL,
+			ID:       track.ID,
+			Name:     track.Name,
+			Artist:   track.Artist,
+			URL:      track.URL,
+			Likes:    track.Likes,
+			Dislikes: track.Dislikes,
 		}
 
 		c.JSON(http.StatusOK, trackResponse)
@@ -112,10 +120,12 @@ func (h *TrackHandler) GetAllTracks() gin.HandlerFunc {
 		var tracksResponse []dto.TrackResponse
 		for _, track := range tracks {
 			trackResponse := dto.TrackResponse{
-				ID:     track.ID,
-				Name:   track.Name,
-				Artist: track.Artist,
-				URL:    track.URL,
+				ID:       track.ID,
+				Name:     track.Name,
+				Artist:   track.Artist,
+				URL:      track.URL,
+				Likes:    track.Likes,
+				Dislikes: track.Dislikes,
 			}
 
 			tracksResponse = append(tracksResponse, trackResponse)
@@ -143,10 +153,12 @@ func (h *TrackHandler) UpdateTrack() gin.HandlerFunc {
 		}
 
 		trackServ := services.Track{
-			ID:     id,
-			Name:   track.Name,
-			Artist: track.Artist,
-			URL:    track.URL,
+			ID:       id,
+			Name:     track.Name,
+			Artist:   track.Artist,
+			URL:      track.URL,
+			Likes:    track.Likes,
+			Dislikes: track.Dislikes,
 		}
 
 		updatedTrack, err := h.service.UpdateTrack(c.Request.Context(), id, &trackServ)
@@ -157,10 +169,12 @@ func (h *TrackHandler) UpdateTrack() gin.HandlerFunc {
 		}
 
 		trackResponse := dto.TrackResponse{
-			ID:     updatedTrack.ID,
-			Name:   updatedTrack.Name,
-			Artist: updatedTrack.Artist,
-			URL:    updatedTrack.URL,
+			ID:       updatedTrack.ID,
+			Name:     updatedTrack.Name,
+			Artist:   updatedTrack.Artist,
+			URL:      updatedTrack.URL,
+			Likes:    updatedTrack.Likes,
+			Dislikes: updatedTrack.Dislikes,
 		}
 
 		c.JSON(http.StatusOK, gin.H{"track": trackResponse})
@@ -207,10 +221,12 @@ func (h *TrackHandler) GetTracksWithPagination() gin.HandlerFunc {
 		var tracksResponse []dto.TrackResponse
 		for _, track := range tracks {
 			trackResponse := dto.TrackResponse{
-				ID:     track.ID,
-				Name:   track.Name,
-				Artist: track.Artist,
-				URL:    track.URL,
+				ID:       track.ID,
+				Name:     track.Name,
+				Artist:   track.Artist,
+				URL:      track.URL,
+				Likes:    track.Likes,
+				Dislikes: track.Dislikes,
 			}
 
 			tracksResponse = append(tracksResponse, trackResponse)
@@ -222,7 +238,7 @@ func (h *TrackHandler) GetTracksWithPagination() gin.HandlerFunc {
 
 func (h *TrackHandler) GetTrackByName() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		name := c.Param("name")
+		name := c.Query("name")
 		tracks, err := h.service.GetTrackByName(c.Request.Context(), name)
 		if err != nil {
 			h.logger.Error("Error fetching track by name", slog.Any("error", err))
@@ -233,10 +249,12 @@ func (h *TrackHandler) GetTrackByName() gin.HandlerFunc {
 		var tracksResponse []dto.TrackResponse
 		for _, track := range tracks {
 			trackResponse := dto.TrackResponse{
-				ID:     track.ID,
-				Name:   track.Name,
-				Artist: track.Artist,
-				URL:    track.URL,
+				ID:       track.ID,
+				Name:     track.Name,
+				Artist:   track.Artist,
+				URL:      track.URL,
+				Likes:    track.Likes,
+				Dislikes: track.Dislikes,
 			}
 
 			tracksResponse = append(tracksResponse, trackResponse)
@@ -248,7 +266,7 @@ func (h *TrackHandler) GetTrackByName() gin.HandlerFunc {
 
 func (h *TrackHandler) GetTrackByArtist() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		artist := c.Param("artist")
+		artist := c.Query("artist")
 		tracks, err := h.service.GetTrackByArtist(c.Request.Context(), artist)
 		if err != nil {
 			h.logger.Error("Error fetching tracks by artist", slog.Any("error", err))
@@ -259,15 +277,117 @@ func (h *TrackHandler) GetTrackByArtist() gin.HandlerFunc {
 		var tracksResponse []dto.TrackResponse
 		for _, track := range tracks {
 			trackResponse := dto.TrackResponse{
-				ID:     track.ID,
-				Name:   track.Name,
-				Artist: track.Artist,
-				URL:    track.URL,
+				ID:       track.ID,
+				Name:     track.Name,
+				Artist:   track.Artist,
+				URL:      track.URL,
+				Likes:    track.Likes,
+				Dislikes: track.Dislikes,
 			}
 
 			tracksResponse = append(tracksResponse, trackResponse)
 		}
 
 		c.JSON(http.StatusOK, tracksResponse)
+	}
+}
+
+func (h *TrackHandler) AddLike() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			h.logger.Error("Invalid ID", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+			return
+		}
+
+		err = h.service.AddLike(c.Request.Context(), id)
+		if err != nil {
+			h.logger.Error("Error adding like", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error adding like"})
+			return
+		}
+
+		message := dto.MessageResponse{
+			Message: "Added like",
+		}
+
+		c.JSON(http.StatusOK, message)
+	}
+}
+
+func (h *TrackHandler) RemoveLike() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			h.logger.Error("Invalid ID", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+			return
+		}
+
+		err = h.service.RemoveLike(c.Request.Context(), id)
+		if err != nil {
+			h.logger.Error("Error removing like", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error removing like"})
+			return
+		}
+
+		message := dto.MessageResponse{
+			Message: "Removed like",
+		}
+
+		c.JSON(http.StatusOK, message)
+	}
+}
+
+func (h *TrackHandler) AddDislike() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			h.logger.Error("Invalid ID", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+			return
+		}
+
+		err = h.service.AddDislike(c.Request.Context(), id)
+		if err != nil {
+			h.logger.Error("Error adding dislike", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error adding dislike"})
+			return
+		}
+
+		message := dto.MessageResponse{
+			Message: "Dislike like",
+		}
+
+		c.JSON(http.StatusOK, message)
+	}
+}
+
+func (h *TrackHandler) RemoveDislike() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idStr := c.Param("id")
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			h.logger.Error("Invalid ID", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+			return
+		}
+
+		err = h.service.RemoveDislike(c.Request.Context(), id)
+		if err != nil {
+			h.logger.Error("Error removing dislike", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error removing dislike"})
+			return
+		}
+
+		message := dto.MessageResponse{
+			Message: "Removed dislike",
+		}
+
+		c.JSON(http.StatusOK, message)
 	}
 }

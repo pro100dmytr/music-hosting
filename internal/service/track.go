@@ -32,9 +32,11 @@ func (s *TrackService) CreateTrack(ctx context.Context, track *services.Track) e
 	}
 
 	repoTrack := repositorys.Track{
-		Name:   track.Name,
-		Artist: track.Artist,
-		URL:    track.URL,
+		Name:     track.Name,
+		Artist:   track.Artist,
+		URL:      track.URL,
+		Likes:    track.Likes,
+		Dislikes: track.Dislikes,
 	}
 
 	id, err := s.trackRepo.Create(ctx, &repoTrack)
@@ -56,10 +58,12 @@ func (s *TrackService) GetTrackByID(ctx context.Context, id int) (*services.Trac
 	}
 
 	track := &services.Track{
-		ID:     repoTrack.ID,
-		Name:   repoTrack.Name,
-		Artist: repoTrack.Artist,
-		URL:    repoTrack.URL,
+		ID:       repoTrack.ID,
+		Name:     repoTrack.Name,
+		Artist:   repoTrack.Artist,
+		URL:      repoTrack.URL,
+		Likes:    repoTrack.Likes,
+		Dislikes: repoTrack.Dislikes,
 	}
 
 	return track, nil
@@ -74,10 +78,12 @@ func (s *TrackService) GetAllTracks(ctx context.Context) ([]*services.Track, err
 	var tracks []*services.Track
 	for _, repoTrack := range repoTracks {
 		track := &services.Track{
-			ID:     repoTrack.ID,
-			Name:   repoTrack.Name,
-			Artist: repoTrack.Artist,
-			URL:    repoTrack.URL,
+			ID:       repoTrack.ID,
+			Name:     repoTrack.Name,
+			Artist:   repoTrack.Artist,
+			URL:      repoTrack.URL,
+			Likes:    repoTrack.Likes,
+			Dislikes: repoTrack.Dislikes,
 		}
 		tracks = append(tracks, track)
 	}
@@ -92,10 +98,12 @@ func (s *TrackService) UpdateTrack(ctx context.Context, id int, track *services.
 	}
 
 	trackRepo := repositorys.Track{
-		ID:     track.ID,
-		Name:   track.Name,
-		Artist: track.Artist,
-		URL:    track.URL,
+		ID:       track.ID,
+		Name:     track.Name,
+		Artist:   track.Artist,
+		URL:      track.URL,
+		Likes:    track.Likes,
+		Dislikes: track.Dislikes,
 	}
 
 	err = s.trackRepo.Update(ctx, &trackRepo, id)
@@ -141,10 +149,12 @@ func (s *TrackService) GetTracksWithPagination(ctx context.Context, offset, limi
 	var tracks []*services.Track
 	for _, repoTrack := range repoTracks {
 		track := &services.Track{
-			ID:     repoTrack.ID,
-			Name:   repoTrack.Name,
-			Artist: repoTrack.Artist,
-			URL:    repoTrack.URL,
+			ID:       repoTrack.ID,
+			Name:     repoTrack.Name,
+			Artist:   repoTrack.Artist,
+			URL:      repoTrack.URL,
+			Likes:    repoTrack.Likes,
+			Dislikes: repoTrack.Dislikes,
 		}
 		tracks = append(tracks, track)
 	}
@@ -164,10 +174,12 @@ func (s *TrackService) GetTrackByName(ctx context.Context, name string) ([]*serv
 	var tracks []*services.Track
 	for _, repoTrack := range repoTracks {
 		track := &services.Track{
-			ID:     repoTrack.ID,
-			Name:   repoTrack.Name,
-			Artist: repoTrack.Artist,
-			URL:    repoTrack.URL,
+			ID:       repoTrack.ID,
+			Name:     repoTrack.Name,
+			Artist:   repoTrack.Artist,
+			URL:      repoTrack.URL,
+			Likes:    repoTrack.Likes,
+			Dislikes: repoTrack.Dislikes,
 		}
 		tracks = append(tracks, track)
 	}
@@ -187,13 +199,67 @@ func (s *TrackService) GetTrackByArtist(ctx context.Context, artist string) ([]*
 	var tracks []*services.Track
 	for _, repoTrack := range repoTracks {
 		track := &services.Track{
-			ID:     repoTrack.ID,
-			Name:   repoTrack.Name,
-			Artist: repoTrack.Artist,
-			URL:    repoTrack.URL,
+			ID:       repoTrack.ID,
+			Name:     repoTrack.Name,
+			Artist:   repoTrack.Artist,
+			URL:      repoTrack.URL,
+			Likes:    repoTrack.Likes,
+			Dislikes: repoTrack.Dislikes,
 		}
 		tracks = append(tracks, track)
 	}
 
 	return tracks, nil
+}
+
+func (s *TrackService) AddLike(ctx context.Context, id int) error {
+	err := s.trackRepo.AddLike(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sql.ErrNoRows
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (s *TrackService) RemoveLike(ctx context.Context, id int) error {
+	err := s.trackRepo.RemoveLike(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sql.ErrNoRows
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (s *TrackService) AddDislike(ctx context.Context, id int) error {
+	err := s.trackRepo.AddLike(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sql.ErrNoRows
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (s *TrackService) RemoveDislike(ctx context.Context, id int) error {
+	err := s.trackRepo.RemoveLike(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return sql.ErrNoRows
+		}
+
+		return err
+	}
+
+	return nil
 }

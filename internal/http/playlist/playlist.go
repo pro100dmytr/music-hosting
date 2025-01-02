@@ -126,7 +126,7 @@ func (h *Handler) GetAllPlaylists() gin.HandlerFunc {
 
 func (h *Handler) GetPlaylistByName() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		name := c.Param("name")
+		name := c.Query("name")
 
 		playlists, err := h.service.GetPlaylistByName(c.Request.Context(), name)
 		if err != nil {
@@ -155,7 +155,7 @@ func (h *Handler) GetPlaylistByName() gin.HandlerFunc {
 
 func (h *Handler) GetPlaylistByUserID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDStr := c.Param("userID")
+		userIDStr := c.Query("userID")
 		userID, err := strconv.Atoi(userIDStr)
 		if err != nil {
 			h.logger.Error("Invalid user ID", slog.Any("Error", err))

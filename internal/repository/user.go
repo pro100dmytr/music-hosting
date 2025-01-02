@@ -248,7 +248,7 @@ func (s *UserStorage) RemovePlaylistsFromUser(ctx context.Context, userID int, p
 }
 
 func (s *UserStorage) GetPlaylistsForUser(ctx context.Context, userID int) ([]int, error) {
-	const query = `SELECT p.id FROM playlists p WHERE p.user_id = $1`
+	const query = `SELECT id FROM playlists WHERE user_id = $1`
 
 	rows, err := s.db.QueryContext(ctx, query, userID)
 	if err != nil {

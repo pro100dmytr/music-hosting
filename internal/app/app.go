@@ -80,12 +80,16 @@ func Run(config string) {
 	{
 		trackRoutes.GET("/tracks", trackHandler.GetAllTracks())
 		trackRoutes.GET("/tracks/:id", trackHandler.GetTrackByID())
-		trackRoutes.GET("/tracks/name/:name", trackHandler.GetTrackByName())
-		trackRoutes.GET("/tracks/artist/:artist", trackHandler.GetTrackByArtist())
+		trackRoutes.GET("/tracks?name=<track_name>", trackHandler.GetTrackByName())
+		trackRoutes.GET("/tracks?artist=<artist>", trackHandler.GetTrackByArtist())
 		trackRoutes.GET("/tracks?offset=1&limit=10", trackHandler.GetTracksWithPagination())
 		trackRoutes.POST("/tracks", trackHandler.CreateTrack())
 		trackRoutes.PUT("/tracks/:id", trackHandler.UpdateTrack())
 		trackRoutes.DELETE("/tracks/:id", trackHandler.DeleteTrack())
+		trackRoutes.PATCH("/tracks/:id/like", trackHandler.AddLike())
+		trackRoutes.DELETE("/tracks/:id/like", trackHandler.RemoveLike())
+		trackRoutes.PATCH("/tracks/:id/dislike", trackHandler.AddDislike())
+		trackRoutes.DELETE("/tracks/:id/dislike", trackHandler.RemoveDislike())
 	}
 
 	playlistRoutes := router.Group("/api")
@@ -93,8 +97,8 @@ func Run(config string) {
 	{
 		playlistRoutes.GET("/playlists", playlistHandler.GetAllPlaylists())
 		playlistRoutes.GET("/playlists/:id", playlistHandler.GetPlaylistByID())
-		playlistRoutes.GET("/playlists/name/:name", playlistHandler.GetPlaylistByName())
-		playlistRoutes.GET("/playlists/userid/:id", playlistHandler.GetPlaylistByUserID())
+		playlistRoutes.GET("/playlists?name=<playlist_name>", playlistHandler.GetPlaylistByName())
+		playlistRoutes.GET("/playlists?userid=<user_id>", playlistHandler.GetPlaylistByUserID())
 		playlistRoutes.POST("/playlists", playlistHandler.CreatePlaylist())
 		playlistRoutes.PUT("/playlists/:id", playlistHandler.UpdatePlaylist())
 		playlistRoutes.DELETE("/playlists/:id", playlistHandler.DeletePlaylist())
