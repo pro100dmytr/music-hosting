@@ -1,5 +1,6 @@
 package repositorys
 
+// TODO: move to repository/models.go
 type User struct {
 	ID         int
 	Login      string

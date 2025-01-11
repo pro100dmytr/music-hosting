@@ -3,10 +3,11 @@ package postgresql
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/lib/pq"
-	"github.com/pressly/goose/v3"
 	"log/slog"
 	"music-hosting/internal/config"
+
+	_ "github.com/lib/pq"
+	"github.com/pressly/goose/v3"
 )
 
 func OpenConnection(cfg *config.Config) (*sql.DB, error) {
@@ -31,8 +32,9 @@ func OpenConnection(cfg *config.Config) (*sql.DB, error) {
 
 	err = goose.Up(db, "db\\migrations")
 	if err != nil {
+		// TODO: remove log, just return error
 		slog.Error("Failed to run migrations", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return db, nil

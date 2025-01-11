@@ -11,6 +11,7 @@ import (
 	"music-hosting/internal/models/services"
 )
 
+// TODO: move to UserService
 func ValidateUser(user *services.User) error {
 	if user.Login == "" {
 		return errors.New("login is required")
@@ -21,6 +22,7 @@ func ValidateUser(user *services.User) error {
 	return nil
 }
 
+// TODO: move to UserService
 func generateSalt() ([]byte, error) {
 	salt := make([]byte, 16)
 	_, err := io.ReadFull(rand.Reader, salt)
@@ -30,6 +32,7 @@ func generateSalt() ([]byte, error) {
 	return salt, nil
 }
 
+// TODO: move to UserService
 func HashPassword(password string) (string, string, error) {
 	salt, err := generateSalt()
 	if err != nil {
@@ -44,6 +47,7 @@ func HashPassword(password string) (string, string, error) {
 	return hex.EncodeToString(hashedPassword), hex.EncodeToString(salt), nil
 }
 
+// TODO: move to UserService
 func CheckPassword(password, storedHash, storedSalt string) (bool, error) {
 	storedHashBytes, err := hex.DecodeString(storedHash)
 	if err != nil {

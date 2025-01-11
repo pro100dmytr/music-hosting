@@ -2,12 +2,14 @@ package jwtutils
 
 import (
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
 	"time"
+
+	"github.com/golang-jwt/jwt/v4"
 )
 
 var secretKey = []byte("12456673443")
 
+// TODO: move to 'auth' package
 func GenerateToken(userID int) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,

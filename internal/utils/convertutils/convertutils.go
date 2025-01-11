@@ -20,6 +20,7 @@ func IntSliceConvertIntoString(slice []int) string {
 	return "{" + strings.Join(values, ",") + "}"
 }
 
+// TODO: delete
 func StringConvertIntoIntSlice(str string) ([]int, error) {
 	str = strings.Trim(str, "{}")
 

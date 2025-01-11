@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/lib/pq"
 	"music-hosting/internal/config"
 	"music-hosting/internal/database/postgresql"
 	"music-hosting/internal/models/repositorys"
+
+	"github.com/lib/pq"
 )
 
 type PlaylistStorage struct {
@@ -31,6 +32,7 @@ func NewPlaylistStorage(cfg *config.Config) (*PlaylistStorage, error) {
 func (s *PlaylistStorage) Create(ctx context.Context, playlist *repositorys.Playlist) error {
 	const query = `INSERT INTO playlists (name, user_id) VALUES ($1, $2) RETURNING id, created_at, updated_at`
 
+	// TODO: remove .Scan
 	err := s.db.QueryRowContext(
 		ctx,
 		query,
@@ -92,7 +94,7 @@ func (s *PlaylistStorage) Get(ctx context.Context, id int) (*repositorys.Playlis
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil, sql.ErrNoRows // TODO: Return nil instead of sql.ErrNoRows
 		}
 		return nil, err
 	}
@@ -157,6 +159,7 @@ func (s *PlaylistStorage) GetByName(ctx context.Context, name string) ([]*reposi
 }
 
 func (s *PlaylistStorage) Update(ctx context.Context, id int, playlist *repositorys.Playlist) error {
+	// TODO: тут не нужна транзакция. Удали ее
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -188,6 +191,7 @@ func (s *PlaylistStorage) Update(ctx context.Context, id int, playlist *reposito
 }
 
 func (s *PlaylistStorage) Delete(ctx context.Context, id int) error {
+	// TODO: тут не нужна транзакция. Удали ее
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -206,6 +210,7 @@ func (s *PlaylistStorage) Delete(ctx context.Context, id int) error {
 		return err
 	}
 
+	// TODO: delete statement
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
 	}
@@ -217,6 +222,9 @@ func (s *PlaylistStorage) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
+// TODO: Лучше удалить этот метод и в TrackRepository создать метод который возвращает
+// список треков по айди плейлиста
+// func () GetTracksByPlaylistID(...) ([]Track, err)
 func (s *PlaylistStorage) GetTracksByPlaylistID(ctx context.Context, playlistID int) ([]int, error) {
 	const query = `SELECT track_id FROM playlist_tracks WHERE playlist_id = $1`
 
@@ -242,6 +250,8 @@ func (s *PlaylistStorage) GetTracksByPlaylistID(ctx context.Context, playlistID 
 	return tracksID, nil
 }
 
+// TODO: функционал реализован неверно. Не нцжно сначала удалять все а потом вставлять.
+// нужно на уровне сервиса определить каких треков нету в плейлисте и добавих их или удалить
 func (s *PlaylistStorage) UpdatePlaylistTracks(ctx context.Context, playlistID int, trackIDs []int) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -271,7 +281,9 @@ func (s *PlaylistStorage) UpdatePlaylistTracks(ctx context.Context, playlistID i
 	return nil
 }
 
+// TODO: функция не работает. Нужно переписать
 func (s *PlaylistStorage) AddTracksToPlaylist(ctx context.Context, playlistID int, trackIDs []int) error {
+	// TODO: удалить транзакцию если не нужна
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -299,6 +311,7 @@ func (s *PlaylistStorage) AddTracksToPlaylist(ctx context.Context, playlistID in
 	return nil
 }
 
+// TODO: функция не работает. Нужно переписать
 func (s *PlaylistStorage) RemoveTracksFromPlaylist(ctx context.Context, playlistID int, trackIDs []int) error {
 	tx, err := s.db.Begin()
 	if err != nil {

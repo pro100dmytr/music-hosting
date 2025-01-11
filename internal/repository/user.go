@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/lib/pq"
 	"music-hosting/internal/config"
 	"music-hosting/internal/database/postgresql"
 	"music-hosting/internal/models/repositorys"
+
+	"github.com/lib/pq"
 )
 
 type UserStorage struct {
@@ -58,7 +59,7 @@ func (s *UserStorage) Get(ctx context.Context, id int) (*repositorys.User, error
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil, sql.ErrNoRows //  TODO: return nil instead of sql.ErrNoRows
 		}
 		return nil, err
 	}
@@ -119,6 +120,7 @@ func (s *UserStorage) Update(ctx context.Context, user *repositorys.User, id int
 		return err
 	}
 
+	// TODO:  delete statement
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
 	}
@@ -131,6 +133,7 @@ func (s *UserStorage) Update(ctx context.Context, user *repositorys.User, id int
 }
 
 func (s *UserStorage) Delete(ctx context.Context, id int) error {
+	// TODO: транзакция тут не нужна
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -203,6 +206,7 @@ func (s *UserStorage) GetUserByLogin(ctx context.Context, login string) (*reposi
 	const query = `SELECT id, login, password_hash, salt FROM users WHERE login = $1`
 	err := s.db.QueryRowContext(ctx, query, login).Scan(&user.ID, &user.Login, &user.Password, &user.Salt)
 	if err != nil {
+		// TODO: стейтмент тут не нужен
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
@@ -212,6 +216,7 @@ func (s *UserStorage) GetUserByLogin(ctx context.Context, login string) (*reposi
 	return user, nil
 }
 
+// TODO: сделай чтобы работало
 func (s *UserStorage) AddPlaylistsToUser(ctx context.Context, userID int, playlistIDs []int) error {
 	const query = `
 		INSERT INTO playlist_tracks (playlist_id, track_id)
@@ -229,6 +234,7 @@ func (s *UserStorage) AddPlaylistsToUser(ctx context.Context, userID int, playli
 	return nil
 }
 
+// TODO: сделай чтобы работало
 func (s *UserStorage) RemovePlaylistsFromUser(ctx context.Context, userID int, playlistIDs []int) error {
 	const query = `
 		DELETE FROM playlist_tracks
@@ -247,6 +253,7 @@ func (s *UserStorage) RemovePlaylistsFromUser(ctx context.Context, userID int, p
 	return nil
 }
 
+// TODO: этот метод должен быть в PlaylistRepository и должен возвращаться []Playlist
 func (s *UserStorage) GetPlaylistsForUser(ctx context.Context, userID int) ([]int, error) {
 	const query = `SELECT id FROM playlists WHERE user_id = $1`
 
@@ -268,6 +275,7 @@ func (s *UserStorage) GetPlaylistsForUser(ctx context.Context, userID int) ([]in
 	return playlistIDs, nil
 }
 
+// TODO: сделай чтобы работало
 func (s *UserStorage) UpdatePlaylistsForUser(ctx context.Context, userID int, playlistIDs []int) error {
 	const query = `
 		UPDATE playlists

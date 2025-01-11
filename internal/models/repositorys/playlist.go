@@ -2,6 +2,7 @@ package repositorys
 
 import "time"
 
+// TODO: move to repository/models.go
 type Playlist struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`

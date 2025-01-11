@@ -53,7 +53,7 @@ func (s *TrackStorage) Get(ctx context.Context, id int) (*repositorys.Track, err
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil, sql.ErrNoRows // TODO: return  nil instead of sql.ErrNoRows
 		}
 		return nil, err
 	}
@@ -89,6 +89,7 @@ func (s *TrackStorage) GetAll(ctx context.Context) ([]*repositorys.Track, error)
 	return tracks, rows.Err()
 }
 
+// TODO: rename to GetByName
 func (s *TrackStorage) GetForName(ctx context.Context, name string) ([]*repositorys.Track, error) {
 	const query = `SELECT * FROM tracks WHERE name = $1`
 	rows, err := s.db.QueryContext(ctx, query, name)
@@ -143,7 +144,9 @@ func (s *TrackStorage) GetForArtist(ctx context.Context, artist string) ([]*repo
 	return tracks, rows.Err()
 }
 
+// TODO: delete 'id' parameter. Take 'id' from 'track'
 func (s *TrackStorage) Update(ctx context.Context, track *repositorys.Track, id int) error {
+	// TODO: транзакция тут не нужна
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -162,6 +165,7 @@ func (s *TrackStorage) Update(ctx context.Context, track *repositorys.Track, id 
 		return err
 	}
 
+	// TODO: удали этот стейтмент. Он тут не нужен
 	if n == 0 {
 		return sql.ErrNoRows
 	}
@@ -174,6 +178,7 @@ func (s *TrackStorage) Update(ctx context.Context, track *repositorys.Track, id 
 }
 
 func (s *TrackStorage) Delete(ctx context.Context, id int) error {
+	// TODO: транзакция тут не нужна
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -231,6 +236,8 @@ func (s *TrackStorage) GetTracks(ctx context.Context, offset, limit int) ([]*rep
 	return tracks, rows.Err()
 }
 
+// TODO: этот метод тебе не нужен. Это можно делать через Update
+// В сервисе нужно получать влейлист, менять кол-во лайков и сохранять
 func (s *TrackStorage) AddLike(ctx context.Context, id int) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -273,6 +280,8 @@ func (s *TrackStorage) AddLike(ctx context.Context, id int) error {
 	return nil
 }
 
+// TODO: этот метод тебе не нужен. Это можно делать через Update.
+// В сервисе нужно получать влейлист, менять кол-во лайков и сохранять
 func (s *TrackStorage) RemoveLike(ctx context.Context, id int) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -315,6 +324,8 @@ func (s *TrackStorage) RemoveLike(ctx context.Context, id int) error {
 	return nil
 }
 
+// TODO: этот метод тебе не нужен. Это можно делать через Update.
+// В сервисе нужно получать влейлист, менять кол-во лайков и сохранять
 func (s *TrackStorage) AddDislike(ctx context.Context, id int) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -357,6 +368,8 @@ func (s *TrackStorage) AddDislike(ctx context.Context, id int) error {
 	return nil
 }
 
+// TODO: этот метод тебе не нужен. Это можно делать через Update.
+// В сервисе нужно получать влейлист, менять кол-во лайков и сохранять
 func (s *TrackStorage) RemoveDislike(ctx context.Context, id int) error {
 	tx, err := s.db.Begin()
 	if err != nil {

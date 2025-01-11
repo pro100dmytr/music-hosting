@@ -1,18 +1,20 @@
 package playlist
 
 import (
+	"context"
 	"database/sql"
 	"errors"
-	"github.com/gin-gonic/gin"
 	"log/slog"
 	"music-hosting/internal/models/dto"
 	"music-hosting/internal/models/https"
 	"music-hosting/internal/models/services"
-	"music-hosting/internal/service"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
+// TODO: delete interface
 type PlaylistHandler interface {
 	CreatePlaylist() gin.HandlerFunc
 	GetPlaylistByID() gin.HandlerFunc
@@ -23,12 +25,18 @@ type PlaylistHandler interface {
 	DeletePlaylist() gin.HandlerFunc
 }
 
+// TODO: add other methods
+type Service interface {
+	CreatePlaylist(ctx context.Context, playlist *services.Playlist) error
+}
+
 type Handler struct {
-	service *service.PlaylistService
+	service Service
 	logger  *slog.Logger
 }
 
-func NewPlaylistHandler(service *service.PlaylistService, logger *slog.Logger) *Handler {
+// TODO: rename to NewHandler
+func NewPlaylistHandler(service Service, logger *slog.Logger) *Handler {
 	return &Handler{service: service, logger: logger}
 }
 
