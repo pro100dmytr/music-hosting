@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// TODO: delete
 func IntSliceConvertIntoString(slice []int) string {
 	if len(slice) == 0 {
 		return ""
