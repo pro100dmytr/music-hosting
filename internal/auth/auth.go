@@ -1,10 +1,9 @@
-package jwtutils
+package auth
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/golang-jwt/jwt/v4"
+	"time"
 )
 
 var secretKey = []byte("12456673443")

@@ -19,101 +19,102 @@ import (
 	"github.com/swaggo/gin-swagger"
 )
 
-// TODO: Run function should return error instead of os.Exit(1)
-func Run(configPath string) {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // TODO: move default level to config.
-	}))
-
-	cfg, err := config.LoadConfig(configPath)
+func Run(configPath string) error {
+	serverCfg, dbCfg, loggerCfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		logger.Error("Error loading config", slog.Any("error", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// TODO: create db connection here
-	// TODO: pass DBConfig as a parameter instead of whole config
-	db, err := postgresql.OpenConnection(cfg)
-	// TODO: handle error
+	var level slog.Level
+	switch loggerCfg.LogLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelDebug
+	}
 
-	// TODO: pass connection to repository
-	userStorage, err := repository.NewUserStorage(cfg)
+	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+	})
+	logger := slog.New(handler)
+
+	db, err := postgresql.OpenConnection(dbCfg)
+	if err != nil {
+		logger.Error("Error creating database connection", slog.Any("error", err))
+		return fmt.Errorf("failed to create database connection: %w", err)
+	}
+	defer db.Close()
+
+	userStorage, err := repository.NewUserStorage(db)
 	if err != nil {
 		logger.Error("Error creating user storage", slog.Any("error", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to create user storage: %w", err)
 	}
-	defer userStorage.Close()
 
 	userService := service.NewUserService(userStorage, logger)
 	userHandler := user.NewHandler(userService, logger)
 
-	// TODO: pass sql.DB as parameter instead of creation one inside
-	trackStorage, err := repository.NewTrackStorage(cfg)
+	trackStorage, err := repository.NewTrackStorage(db)
 	if err != nil {
 		logger.Error("Error creating track storage", slog.Any("error", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to create track storage: %w", err)
 	}
-	defer trackStorage.Close()
 
 	trackService := service.NewTrackService(trackStorage, logger)
-	trackHandler := track.NewTrackHandler(trackService, logger)
+	trackHandler := track.NewHandler(trackService, logger)
 
-	playlistStorage, err := repository.NewPlaylistStorage(cfg)
+	playlistStorage, err := repository.NewPlaylistStorage(db)
 	if err != nil {
 		logger.Error("Error creating playlist storage", slog.Any("error", err))
-		os.Exit(1)
+		return fmt.Errorf("failed to create playlist storage: %w", err)
 	}
-	defer playlistStorage.Close()
 
 	playlistService := service.NewPlaylistService(playlistStorage, logger)
-	playlistHandler := playlist.NewPlaylistHandler(playlistService, logger)
+	playlistHandler := playlist.NewHandler(playlistService, logger)
 
 	router := gin.Default()
 
+	router.POST("/users/create", userHandler.CreateUser())
+	router.POST("/tracks/create", trackHandler.CreateTrack())
+	router.POST("/playlists/create", playlistHandler.CreatePlaylist())
 	router.POST("/users/login", userHandler.Login())
-
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// TODO: use one group for all routes
-	userRoutes := router.Group("/api/v1")
-	userRoutes.Use(middleware.AuthMiddleware())
-
-	userRoutes.GET("/users", userHandler.GetAllUsers())
-	userRoutes.GET("/users/:id", userHandler.GetUserID())
-	userRoutes.GET("/users?offset=1&limit=10", userHandler.GetUserWithPagination())
-	userRoutes.POST("/users", userHandler.CreateUser())
-	userRoutes.PUT("/users/:id", userHandler.UpdateUser())
-	userRoutes.DELETE("/users/:id", userHandler.DeleteUser())
-
-	trackRoutes := router.Group("/api")
-	trackRoutes.Use(middleware.AuthMiddleware())
-	trackRoutes.GET("/tracks", trackHandler.GetAllTracks())
-	trackRoutes.GET("/tracks/:id", trackHandler.GetTrackByID())
-	trackRoutes.GET("/tracks?name=<track_name>", trackHandler.GetTrackByName())
-	trackRoutes.GET("/tracks?artist=<artist>", trackHandler.GetTrackByArtist())
-	trackRoutes.GET("/tracks?offset=1&limit=10", trackHandler.GetTracksWithPagination())
-	trackRoutes.POST("/tracks", trackHandler.CreateTrack())
-	trackRoutes.PUT("/tracks/:id", trackHandler.UpdateTrack())
-	trackRoutes.DELETE("/tracks/:id", trackHandler.DeleteTrack())
-	trackRoutes.PATCH("/tracks/:id/like", trackHandler.AddLike())
-	trackRoutes.DELETE("/tracks/:id/like", trackHandler.RemoveLike())
-	trackRoutes.PATCH("/tracks/:id/dislike", trackHandler.AddDislike())
-	trackRoutes.DELETE("/tracks/:id/dislike", trackHandler.RemoveDislike())
-
-	playlistRoutes := router.Group("/api")
-	playlistRoutes.Use(middleware.AuthMiddleware())
+	Routes := router.Group("/api/v1")
+	Routes.Use(middleware.AuthMiddleware())
 	{
-		playlistRoutes.GET("/playlists", playlistHandler.GetAllPlaylists())
-		playlistRoutes.GET("/playlists/:id", playlistHandler.GetPlaylistByID())
-		playlistRoutes.GET("/playlists?name=<playlist_name>", playlistHandler.GetPlaylistByName())
-		playlistRoutes.GET("/playlists?userid=<user_id>", playlistHandler.GetPlaylistByUserID())
-		playlistRoutes.POST("/playlists", playlistHandler.CreatePlaylist())
-		playlistRoutes.PUT("/playlists/:id", playlistHandler.UpdatePlaylist())
-		playlistRoutes.DELETE("/playlists/:id", playlistHandler.DeletePlaylist())
+		Routes.GET("/users", userHandler.GetAllUsers())
+		Routes.GET("/users/:id", userHandler.GetUserID())
+		Routes.GET("/users?offset=1&limit=10", userHandler.GetUserWithPagination())
+		Routes.PUT("/users/:id", userHandler.UpdateUser())
+		Routes.DELETE("/users/:id", userHandler.DeleteUser())
+
+		Routes.GET("/tracks", trackHandler.GetAllTracks())
+		Routes.GET("/tracks/:id", trackHandler.GetTrackByID())
+		Routes.GET("/tracks?name=<track_name>", trackHandler.GetTracksByName())
+		Routes.GET("/tracks?artist=<artist>", trackHandler.GetTrackByArtist())
+		Routes.GET("/tracks?playlistID=<playlistID>", trackHandler.GetTracksByPlaylistID())
+		Routes.GET("/tracks?offset=1&limit=10", trackHandler.GetTracksWithPagination())
+		Routes.PUT("/tracks/:id", trackHandler.UpdateTrack())
+		Routes.DELETE("/tracks/:id", trackHandler.DeleteTrack())
+
+		Routes.GET("/playlists", playlistHandler.GetAllPlaylists())
+		Routes.GET("/playlists/:id", playlistHandler.GetPlaylistByID())
+		Routes.GET("/playlists?name=<playlist_name>", playlistHandler.GetPlaylistByName())
+		Routes.GET("/playlists?userid=<user_id>", playlistHandler.GetPlaylistByUserID())
+		Routes.PUT("/playlists/:id", playlistHandler.UpdatePlaylist())
+		Routes.DELETE("/playlists/:id", playlistHandler.DeletePlaylist())
 	}
 
-	if err = router.Run(fmt.Sprintf(":%s", cfg.Server.Port)); err != nil {
-		logger.Error("Failed to start server", slog.Any("error", err))
-		os.Exit(1)
+	if err = router.Run(fmt.Sprintf(":%s", serverCfg.Port)); err != nil {
+		return fmt.Errorf("Failed to start server: %w", err)
 	}
+
+	return nil
 }

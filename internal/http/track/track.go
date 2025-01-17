@@ -1,55 +1,51 @@
 package track
 
 import (
+	"context"
 	"database/sql"
 	"errors"
-	"github.com/gin-gonic/gin"
 	"log/slog"
-	"music-hosting/internal/models/dto"
-	"music-hosting/internal/models/https"
-	"music-hosting/internal/models/services"
-	"music-hosting/internal/service"
+	"music-hosting/internal/models"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
-type Handler interface {
-	CreateTrack() gin.HandlerFunc
-	GetTrackID() gin.HandlerFunc
-	GetAllTracks() gin.HandlerFunc
-	GetTrackForName() gin.HandlerFunc
-	GetTrackForArtist() gin.HandlerFunc
-	GetTrackWithPagination() gin.HandlerFunc
-	UpdateTrack() gin.HandlerFunc
-	DeleteTrack() gin.HandlerFunc
-	AddLike() gin.HandlerFunc
-	RemoveLike() gin.HandlerFunc
-	AddDislike() gin.HandlerFunc
-	RemoveDislike() gin.HandlerFunc
+type Service interface {
+	CreateTrack(ctx context.Context, track *models.Track) error
+	GetTrackByID(ctx context.Context, id int) (*models.Track, error)
+	GetAllTracks(ctx context.Context) ([]*models.Track, error)
+	GetTracksByName(ctx context.Context, name string) ([]*models.Track, error)
+	GetTracksByArtist(ctx context.Context, artist string) ([]*models.Track, error)
+	GetTracksByPlaylistID(ctx context.Context, playlistID int) ([]*models.Track, error)
+	GetTracksWithPagination(ctx context.Context, offset, limit string) ([]*models.Track, error)
+	UpdateTrack(ctx context.Context, track *models.Track) error
+	DeleteTrack(ctx context.Context, id int) error
 }
 
-type TrackHandler struct {
-	service *service.TrackService
+type Handler struct {
+	service Service
 	logger  *slog.Logger
 }
 
-func NewTrackHandler(service *service.TrackService, logger *slog.Logger) *TrackHandler {
-	return &TrackHandler{
+func NewHandler(service Service, logger *slog.Logger) *Handler {
+	return &Handler{
 		service: service,
 		logger:  logger,
 	}
 }
 
-func (h *TrackHandler) CreateTrack() gin.HandlerFunc {
+func (h *Handler) CreateTrack() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var track https.Track
+		var track models.TrackRequest
 		if err := c.ShouldBindJSON(&track); err != nil {
 			h.logger.Error("Invalid request", slog.Any("error", err))
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 			return
 		}
 
-		trackServ := services.Track{
+		trackServ := models.Track{
 			Name:     track.Name,
 			Artist:   track.Artist,
 			URL:      track.URL,
@@ -64,7 +60,7 @@ func (h *TrackHandler) CreateTrack() gin.HandlerFunc {
 			return
 		}
 
-		message := dto.MessageResponse{
+		message := models.MessageResponse{
 			Message: "Created track",
 		}
 
@@ -72,7 +68,7 @@ func (h *TrackHandler) CreateTrack() gin.HandlerFunc {
 	}
 }
 
-func (h *TrackHandler) GetTrackByID() gin.HandlerFunc {
+func (h *Handler) GetTrackByID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.Atoi(idStr)
@@ -95,7 +91,7 @@ func (h *TrackHandler) GetTrackByID() gin.HandlerFunc {
 			return
 		}
 
-		trackResponse := dto.TrackResponse{
+		trackResponse := models.TrackResponse{
 			ID:       track.ID,
 			Name:     track.Name,
 			Artist:   track.Artist,
@@ -108,7 +104,7 @@ func (h *TrackHandler) GetTrackByID() gin.HandlerFunc {
 	}
 }
 
-func (h *TrackHandler) GetAllTracks() gin.HandlerFunc {
+func (h *Handler) GetAllTracks() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tracks, err := h.service.GetAllTracks(c.Request.Context())
 		if err != nil {
@@ -117,9 +113,9 @@ func (h *TrackHandler) GetAllTracks() gin.HandlerFunc {
 			return
 		}
 
-		var tracksResponse []dto.TrackResponse
+		var tracksResponse []models.TrackResponse
 		for _, track := range tracks {
-			trackResponse := dto.TrackResponse{
+			trackResponse := models.TrackResponse{
 				ID:       track.ID,
 				Name:     track.Name,
 				Artist:   track.Artist,
@@ -135,7 +131,7 @@ func (h *TrackHandler) GetAllTracks() gin.HandlerFunc {
 	}
 }
 
-func (h *TrackHandler) UpdateTrack() gin.HandlerFunc {
+func (h *Handler) UpdateTrack() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.Atoi(idStr)
@@ -145,14 +141,14 @@ func (h *TrackHandler) UpdateTrack() gin.HandlerFunc {
 			return
 		}
 
-		var track https.Track
+		var track models.TrackRequest
 		if err := c.ShouldBindJSON(&track); err != nil {
 			h.logger.Error("Invalid request", slog.Any("error", err))
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 			return
 		}
 
-		trackServ := services.Track{
+		trackServ := models.Track{
 			ID:       id,
 			Name:     track.Name,
 			Artist:   track.Artist,
@@ -161,27 +157,22 @@ func (h *TrackHandler) UpdateTrack() gin.HandlerFunc {
 			Dislikes: track.Dislikes,
 		}
 
-		updatedTrack, err := h.service.UpdateTrack(c.Request.Context(), id, &trackServ)
+		err = h.service.UpdateTrack(c.Request.Context(), &trackServ)
 		if err != nil {
 			h.logger.Error("Error updating track", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating track"})
 			return
 		}
 
-		trackResponse := dto.TrackResponse{
-			ID:       updatedTrack.ID,
-			Name:     updatedTrack.Name,
-			Artist:   updatedTrack.Artist,
-			URL:      updatedTrack.URL,
-			Likes:    updatedTrack.Likes,
-			Dislikes: updatedTrack.Dislikes,
+		response := models.MessageResponse{
+			Message: "Updated track",
 		}
 
-		c.JSON(http.StatusOK, gin.H{"track": trackResponse})
+		c.JSON(http.StatusOK, response)
 	}
 }
 
-func (h *TrackHandler) DeleteTrack() gin.HandlerFunc {
+func (h *Handler) DeleteTrack() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
 		id, err := strconv.Atoi(idStr)
@@ -198,7 +189,7 @@ func (h *TrackHandler) DeleteTrack() gin.HandlerFunc {
 			return
 		}
 
-		message := dto.MessageResponse{
+		message := models.MessageResponse{
 			Message: "Deleted track",
 		}
 
@@ -206,7 +197,7 @@ func (h *TrackHandler) DeleteTrack() gin.HandlerFunc {
 	}
 }
 
-func (h *TrackHandler) GetTracksWithPagination() gin.HandlerFunc {
+func (h *Handler) GetTracksWithPagination() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		offset := c.DefaultQuery("offset", "0")
 		limit := c.DefaultQuery("limit", "10")
@@ -218,9 +209,9 @@ func (h *TrackHandler) GetTracksWithPagination() gin.HandlerFunc {
 			return
 		}
 
-		var tracksResponse []dto.TrackResponse
+		var tracksResponse []models.TrackResponse
 		for _, track := range tracks {
-			trackResponse := dto.TrackResponse{
+			trackResponse := models.TrackResponse{
 				ID:       track.ID,
 				Name:     track.Name,
 				Artist:   track.Artist,
@@ -236,19 +227,19 @@ func (h *TrackHandler) GetTracksWithPagination() gin.HandlerFunc {
 	}
 }
 
-func (h *TrackHandler) GetTrackByName() gin.HandlerFunc {
+func (h *Handler) GetTracksByName() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Query("name")
-		tracks, err := h.service.GetTrackByName(c.Request.Context(), name)
+		tracks, err := h.service.GetTracksByName(c.Request.Context(), name)
 		if err != nil {
 			h.logger.Error("Error fetching track by name", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching track by name"})
 			return
 		}
 
-		var tracksResponse []dto.TrackResponse
+		var tracksResponse []models.TrackResponse
 		for _, track := range tracks {
-			trackResponse := dto.TrackResponse{
+			trackResponse := models.TrackResponse{
 				ID:       track.ID,
 				Name:     track.Name,
 				Artist:   track.Artist,
@@ -264,19 +255,19 @@ func (h *TrackHandler) GetTrackByName() gin.HandlerFunc {
 	}
 }
 
-func (h *TrackHandler) GetTrackByArtist() gin.HandlerFunc {
+func (h *Handler) GetTrackByArtist() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		artist := c.Query("artist")
-		tracks, err := h.service.GetTrackByArtist(c.Request.Context(), artist)
+		tracks, err := h.service.GetTracksByArtist(c.Request.Context(), artist)
 		if err != nil {
 			h.logger.Error("Error fetching tracks by artist", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching tracks by artist"})
 			return
 		}
 
-		var tracksResponse []dto.TrackResponse
+		var tracksResponse []models.TrackResponse
 		for _, track := range tracks {
-			trackResponse := dto.TrackResponse{
+			trackResponse := models.TrackResponse{
 				ID:       track.ID,
 				Name:     track.Name,
 				Artist:   track.Artist,
@@ -292,102 +283,37 @@ func (h *TrackHandler) GetTrackByArtist() gin.HandlerFunc {
 	}
 }
 
-func (h *TrackHandler) AddLike() gin.HandlerFunc {
+func (h *Handler) GetTracksByPlaylistID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		idStr := c.Param("id")
-		id, err := strconv.Atoi(idStr)
+		idStr := c.Query("playlistID")
+		playlistID, err := strconv.Atoi(idStr)
 		if err != nil {
-			h.logger.Error("Invalid ID", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+			h.logger.Error("Invalid playlist ID", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid playlist ID"})
 			return
 		}
 
-		err = h.service.AddLike(c.Request.Context(), id)
+		tracks, err := h.service.GetTracksByPlaylistID(c.Request.Context(), playlistID)
 		if err != nil {
-			h.logger.Error("Error adding like", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error adding like"})
+			h.logger.Error("Error fetching tracks by playlist", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching tracks by playlist"})
 			return
 		}
 
-		message := dto.MessageResponse{
-			Message: "Added like",
+		var tracksResponse []models.TrackResponse
+		for _, track := range tracks {
+			trackResponse := models.TrackResponse{
+				ID:       track.ID,
+				Name:     track.Name,
+				Artist:   track.Artist,
+				URL:      track.URL,
+				Likes:    track.Likes,
+				Dislikes: track.Dislikes,
+			}
+
+			tracksResponse = append(tracksResponse, trackResponse)
 		}
 
-		c.JSON(http.StatusOK, message)
-	}
-}
-
-func (h *TrackHandler) RemoveLike() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idStr := c.Param("id")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			h.logger.Error("Invalid ID", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
-			return
-		}
-
-		err = h.service.RemoveLike(c.Request.Context(), id)
-		if err != nil {
-			h.logger.Error("Error removing like", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error removing like"})
-			return
-		}
-
-		message := dto.MessageResponse{
-			Message: "Removed like",
-		}
-
-		c.JSON(http.StatusOK, message)
-	}
-}
-
-func (h *TrackHandler) AddDislike() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idStr := c.Param("id")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			h.logger.Error("Invalid ID", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
-			return
-		}
-
-		err = h.service.AddDislike(c.Request.Context(), id)
-		if err != nil {
-			h.logger.Error("Error adding dislike", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error adding dislike"})
-			return
-		}
-
-		message := dto.MessageResponse{
-			Message: "Dislike like",
-		}
-
-		c.JSON(http.StatusOK, message)
-	}
-}
-
-func (h *TrackHandler) RemoveDislike() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idStr := c.Param("id")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			h.logger.Error("Invalid ID", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
-			return
-		}
-
-		err = h.service.RemoveDislike(c.Request.Context(), id)
-		if err != nil {
-			h.logger.Error("Error removing dislike", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error removing dislike"})
-			return
-		}
-
-		message := dto.MessageResponse{
-			Message: "Removed dislike",
-		}
-
-		c.JSON(http.StatusOK, message)
+		c.JSON(http.StatusOK, tracksResponse)
 	}
 }

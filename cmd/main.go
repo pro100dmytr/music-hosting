@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"music-hosting/internal/app"
 )
 
@@ -26,5 +27,8 @@ import (
 
 // TODO: move main.go to cmd/main.go
 func main() {
-	app.Run("internal/config/config.yaml")
+	err := app.Run("internal/config/config.yaml")
+	if err != nil {
+		fmt.Println(err)
+	}
 }

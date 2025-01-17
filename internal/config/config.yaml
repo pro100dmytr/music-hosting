@@ -1,7 +1,5 @@
 server:
   port: "8080"
-
-
 database:
   host: "localhost"
   port: "5432"
@@ -9,3 +7,5 @@ database:
   password: "agario007"
   dbname: "postgres"
   sslmode: "disable"
+logger:
+  log_level: "debug"

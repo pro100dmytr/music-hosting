@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"github.com/gin-gonic/gin"
-	"music-hosting/internal/utils/jwtutils"
+	"music-hosting/internal/auth"
 	"net/http"
 	"strings"
 )
@@ -19,7 +19,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		tokenString = tokenString[len("Bearer "):]
 
-		userID, err := jwtutils.ValidateToken(tokenString)
+		userID, err := auth.ValidateToken(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()

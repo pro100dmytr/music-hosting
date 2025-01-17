@@ -6,10 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"music-hosting/internal/models/repositorys"
-	"music-hosting/internal/models/services"
+	"music-hosting/internal/models"
 	"music-hosting/internal/repository"
-	"music-hosting/internal/utils/trackutils"
 	"strconv"
 )
 
@@ -25,13 +23,26 @@ func NewTrackService(trackRepo *repository.TrackStorage, logger *slog.Logger) *T
 	}
 }
 
-func (s *TrackService) CreateTrack(ctx context.Context, track *services.Track) error {
-	err := trackutils.ValidateTrack(track)
+func ValidateTrack(track *models.Track) error {
+	if track.Name == "" {
+		return errors.New("name is required")
+	}
+	if track.Artist == "" {
+		return errors.New("artist is required")
+	}
+	if track.URL == "" {
+		return errors.New("url is required")
+	}
+	return nil
+}
+
+func (s *TrackService) CreateTrack(ctx context.Context, track *models.Track) error {
+	err := ValidateTrack(track)
 	if err != nil {
 		return err
 	}
 
-	repoTrack := repositorys.Track{
+	repoTrack := repository.Track{
 		Name:     track.Name,
 		Artist:   track.Artist,
 		URL:      track.URL,
@@ -48,16 +59,15 @@ func (s *TrackService) CreateTrack(ctx context.Context, track *services.Track) e
 	return nil
 }
 
-func (s *TrackService) GetTrackByID(ctx context.Context, id int) (*services.Track, error) {
+func (s *TrackService) GetTrackByID(ctx context.Context, id int) (*models.Track, error) {
 	repoTrack, err := s.trackRepo.Get(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil, nil
 		}
 		return nil, err
 	}
-
-	track := &services.Track{
+	track := &models.Track{
 		ID:       repoTrack.ID,
 		Name:     repoTrack.Name,
 		Artist:   repoTrack.Artist,
@@ -69,15 +79,15 @@ func (s *TrackService) GetTrackByID(ctx context.Context, id int) (*services.Trac
 	return track, nil
 }
 
-func (s *TrackService) GetAllTracks(ctx context.Context) ([]*services.Track, error) {
+func (s *TrackService) GetAllTracks(ctx context.Context) ([]*models.Track, error) {
 	repoTracks, err := s.trackRepo.GetAll(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var tracks []*services.Track
+	var tracks []*models.Track
 	for _, repoTrack := range repoTracks {
-		track := &services.Track{
+		track := &models.Track{
 			ID:       repoTrack.ID,
 			Name:     repoTrack.Name,
 			Artist:   repoTrack.Artist,
@@ -91,13 +101,13 @@ func (s *TrackService) GetAllTracks(ctx context.Context) ([]*services.Track, err
 	return tracks, nil
 }
 
-func (s *TrackService) UpdateTrack(ctx context.Context, id int, track *services.Track) (*services.Track, error) {
-	err := trackutils.ValidateTrack(track)
+func (s *TrackService) UpdateTrack(ctx context.Context, track *models.Track) error {
+	err := ValidateTrack(track)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	trackRepo := repositorys.Track{
+	trackRepo := repository.Track{
 		ID:       track.ID,
 		Name:     track.Name,
 		Artist:   track.Artist,
@@ -106,16 +116,15 @@ func (s *TrackService) UpdateTrack(ctx context.Context, id int, track *services.
 		Dislikes: track.Dislikes,
 	}
 
-	err = s.trackRepo.Update(ctx, &trackRepo, id)
+	err = s.trackRepo.Update(ctx, &trackRepo)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil
 		}
-		return nil, err
+		return err
 	}
 
-	track.ID = id
-	return track, nil
+	return nil
 }
 
 func (s *TrackService) DeleteTrack(ctx context.Context, id int) error {
@@ -130,7 +139,7 @@ func (s *TrackService) DeleteTrack(ctx context.Context, id int) error {
 	return nil
 }
 
-func (s *TrackService) GetTracksWithPagination(ctx context.Context, offset, limit string) ([]*services.Track, error) {
+func (s *TrackService) GetTracksWithPagination(ctx context.Context, offset, limit string) ([]*models.Track, error) {
 	limitInt, err := strconv.Atoi(limit)
 	if err != nil || limitInt < 1 {
 		return nil, fmt.Errorf("invalid limit parametr")
@@ -146,9 +155,9 @@ func (s *TrackService) GetTracksWithPagination(ctx context.Context, offset, limi
 		return nil, err
 	}
 
-	var tracks []*services.Track
+	var tracks []*models.Track
 	for _, repoTrack := range repoTracks {
-		track := &services.Track{
+		track := &models.Track{
 			ID:       repoTrack.ID,
 			Name:     repoTrack.Name,
 			Artist:   repoTrack.Artist,
@@ -162,18 +171,18 @@ func (s *TrackService) GetTracksWithPagination(ctx context.Context, offset, limi
 	return tracks, nil
 }
 
-func (s *TrackService) GetTrackByName(ctx context.Context, name string) ([]*services.Track, error) {
-	repoTracks, err := s.trackRepo.GetForName(ctx, name)
+func (s *TrackService) GetTracksByName(ctx context.Context, name string) ([]*models.Track, error) {
+	repoTracks, err := s.trackRepo.GetByName(ctx, name)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil, nil
 		}
 		return nil, err
 	}
 
-	var tracks []*services.Track
+	var tracks []*models.Track
 	for _, repoTrack := range repoTracks {
-		track := &services.Track{
+		track := &models.Track{
 			ID:       repoTrack.ID,
 			Name:     repoTrack.Name,
 			Artist:   repoTrack.Artist,
@@ -187,18 +196,18 @@ func (s *TrackService) GetTrackByName(ctx context.Context, name string) ([]*serv
 	return tracks, nil
 }
 
-func (s *TrackService) GetTrackByArtist(ctx context.Context, artist string) ([]*services.Track, error) {
-	repoTracks, err := s.trackRepo.GetForArtist(ctx, artist)
+func (s *TrackService) GetTracksByArtist(ctx context.Context, artist string) ([]*models.Track, error) {
+	repoTracks, err := s.trackRepo.GetByArtist(ctx, artist)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil, nil
 		}
 		return nil, err
 	}
 
-	var tracks []*services.Track
+	var tracks []*models.Track
 	for _, repoTrack := range repoTracks {
-		track := &services.Track{
+		track := &models.Track{
 			ID:       repoTrack.ID,
 			Name:     repoTrack.Name,
 			Artist:   repoTrack.Artist,
@@ -212,54 +221,27 @@ func (s *TrackService) GetTrackByArtist(ctx context.Context, artist string) ([]*
 	return tracks, nil
 }
 
-func (s *TrackService) AddLike(ctx context.Context, id int) error {
-	err := s.trackRepo.AddLike(ctx, id)
+func (s *TrackService) GetTracksByPlaylistID(ctx context.Context, playlistID int) ([]*models.Track, error) {
+	repoTracks, err := s.trackRepo.GetTracksByPlaylistID(ctx, playlistID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return sql.ErrNoRows
+			return nil, nil
 		}
-
-		return err
+		return nil, err
 	}
 
-	return nil
-}
-
-func (s *TrackService) RemoveLike(ctx context.Context, id int) error {
-	err := s.trackRepo.RemoveLike(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return sql.ErrNoRows
+	var tracks []*models.Track
+	for _, repoTrack := range repoTracks {
+		track := &models.Track{
+			ID:       repoTrack.ID,
+			Name:     repoTrack.Name,
+			Artist:   repoTrack.Artist,
+			URL:      repoTrack.URL,
+			Likes:    repoTrack.Likes,
+			Dislikes: repoTrack.Dislikes,
 		}
-
-		return err
+		tracks = append(tracks, track)
 	}
 
-	return nil
-}
-
-func (s *TrackService) AddDislike(ctx context.Context, id int) error {
-	err := s.trackRepo.AddLike(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return sql.ErrNoRows
-		}
-
-		return err
-	}
-
-	return nil
-}
-
-func (s *TrackService) RemoveDislike(ctx context.Context, id int) error {
-	err := s.trackRepo.RemoveLike(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return sql.ErrNoRows
-		}
-
-		return err
-	}
-
-	return nil
+	return tracks, nil
 }

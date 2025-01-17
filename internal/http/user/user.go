@@ -1,39 +1,39 @@
 package user
 
 import (
+	"context"
 	"database/sql"
 	"errors"
-	"github.com/gin-gonic/gin"
 	"log/slog"
-	"music-hosting/internal/models/dto"
-	"music-hosting/internal/models/https"
-	"music-hosting/internal/models/services"
-	"music-hosting/internal/service"
+	"music-hosting/internal/models"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
 )
 
-type Handler interface {
-	CreateUser() gin.HandlerFunc
-	GetUserID() gin.HandlerFunc
-	GetAllUsers() gin.HandlerFunc
-	GetUserWithPagination() gin.HandlerFunc
-	UpdateUser() gin.HandlerFunc
-	DeleteUser() gin.HandlerFunc
+type Service interface {
+	CreateUser(ctx context.Context, user *models.User) error
+	GetUser(ctx context.Context, id int) (*models.User, error)
+	GetAllUsers(ctx context.Context) ([]*models.User, error)
+	GetUsersWithPagination(ctx context.Context, limit, offset string) ([]*models.User, error)
+	UpdateUser(ctx context.Context, id int, user *models.User) error
+	DeleteUser(ctx context.Context, id int) error
+	GetToken(ctx context.Context, login string, password string) (string, error)
 }
 
-type UserHandler struct {
-	service *service.UserService
+type Handler struct {
+	service Service
 	logger  *slog.Logger
 }
 
-func NewHandler(service *service.UserService, logger *slog.Logger) *UserHandler {
-	return &UserHandler{service: service, logger: logger}
+func NewHandler(service Service, logger *slog.Logger) *Handler {
+	return &Handler{service: service, logger: logger}
 }
 
-func (h *UserHandler) CreateUser() gin.HandlerFunc {
+func (h *Handler) CreateUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var user https.User
+		var user models.UserRequest
 
 		if err := c.ShouldBindJSON(&user); err != nil {
 			h.logger.Error("Invalid request", slog.Any("error", err))
@@ -41,11 +41,10 @@ func (h *UserHandler) CreateUser() gin.HandlerFunc {
 			return
 		}
 
-		userServ := services.User{
-			Login:      user.Login,
-			Email:      user.Email,
-			Password:   user.Password,
-			PlaylistID: user.PlaylistID,
+		userServ := models.User{
+			Login:    user.Login,
+			Email:    user.Email,
+			Password: user.Password,
 		}
 
 		err := h.service.CreateUser(c.Request.Context(), &userServ)
@@ -55,7 +54,7 @@ func (h *UserHandler) CreateUser() gin.HandlerFunc {
 			return
 		}
 
-		userResponse := dto.UserResponse{
+		userResponse := models.UserResponse{
 			ID: userServ.ID,
 		}
 
@@ -63,7 +62,7 @@ func (h *UserHandler) CreateUser() gin.HandlerFunc {
 	}
 }
 
-func (h *UserHandler) GetUserID() gin.HandlerFunc {
+func (h *Handler) GetUserID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("id"))
 		if err != nil {
@@ -85,18 +84,17 @@ func (h *UserHandler) GetUserID() gin.HandlerFunc {
 			return
 		}
 
-		userResponse := dto.UserResponse{
-			ID:          user.ID,
-			Login:       user.Login,
-			Email:       user.Email,
-			PlaylistsID: user.PlaylistID,
+		userResponse := models.UserResponse{
+			ID:    user.ID,
+			Login: user.Login,
+			Email: user.Email,
 		}
 
 		c.JSON(http.StatusOK, userResponse)
 	}
 }
 
-func (h *UserHandler) GetAllUsers() gin.HandlerFunc {
+func (h *Handler) GetAllUsers() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		users, err := h.service.GetAllUsers(c.Request.Context())
 		if err != nil {
@@ -105,13 +103,12 @@ func (h *UserHandler) GetAllUsers() gin.HandlerFunc {
 			return
 		}
 
-		var usersResponse []dto.UserResponse
+		var usersResponse []models.UserResponse
 		for _, user := range users {
-			userResponse := dto.UserResponse{
-				ID:          user.ID,
-				Login:       user.Login,
-				Email:       user.Email,
-				PlaylistsID: user.PlaylistID,
+			userResponse := models.UserResponse{
+				ID:    user.ID,
+				Login: user.Login,
+				Email: user.Email,
 			}
 			usersResponse = append(usersResponse, userResponse)
 		}
@@ -120,7 +117,7 @@ func (h *UserHandler) GetAllUsers() gin.HandlerFunc {
 	}
 }
 
-func (h *UserHandler) UpdateUser() gin.HandlerFunc {
+func (h *Handler) UpdateUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("id"))
 		if err != nil {
@@ -129,21 +126,20 @@ func (h *UserHandler) UpdateUser() gin.HandlerFunc {
 			return
 		}
 
-		var user https.User
+		var user models.UserRequest
 		if err := c.ShouldBindJSON(&user); err != nil {
 			h.logger.Error("Invalid request body", slog.Any("error", err))
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 			return
 		}
 
-		userServ := services.User{
-			Login:      user.Login,
-			Email:      user.Email,
-			Password:   user.Password,
-			PlaylistID: user.PlaylistID,
+		userServ := models.User{
+			Login:    user.Login,
+			Email:    user.Email,
+			Password: user.Password,
 		}
 
-		updatedUser, err := h.service.UpdateUser(c.Request.Context(), id, &userServ)
+		err = h.service.UpdateUser(c.Request.Context(), id, &userServ)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				h.logger.Error("User not found", slog.Any("error", err))
@@ -155,18 +151,15 @@ func (h *UserHandler) UpdateUser() gin.HandlerFunc {
 			return
 		}
 
-		userResponse := dto.UserResponse{
-			ID:          updatedUser.ID,
-			Login:       updatedUser.Login,
-			Email:       updatedUser.Email,
-			PlaylistsID: updatedUser.PlaylistID,
+		response := models.MessageResponse{
+			Message: "User updated",
 		}
 
-		c.JSON(http.StatusOK, userResponse)
+		c.JSON(http.StatusOK, response)
 	}
 }
 
-func (h *UserHandler) DeleteUser() gin.HandlerFunc {
+func (h *Handler) DeleteUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("id"))
 		if err != nil {
@@ -187,7 +180,7 @@ func (h *UserHandler) DeleteUser() gin.HandlerFunc {
 			return
 		}
 
-		message := dto.MessageResponse{
+		message := models.MessageResponse{
 			Message: "User deleted",
 		}
 
@@ -195,7 +188,7 @@ func (h *UserHandler) DeleteUser() gin.HandlerFunc {
 	}
 }
 
-func (h *UserHandler) GetUserWithPagination() gin.HandlerFunc {
+func (h *Handler) GetUserWithPagination() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		offset := c.DefaultQuery("offset", "0")
 		limit := c.DefaultQuery("limit", "10")
@@ -207,13 +200,12 @@ func (h *UserHandler) GetUserWithPagination() gin.HandlerFunc {
 			return
 		}
 
-		var usersResponse []dto.UserResponse
+		var usersResponse []models.UserResponse
 		for _, user := range users {
-			userResponse := dto.UserResponse{
-				ID:          user.ID,
-				Login:       user.Login,
-				Email:       user.Email,
-				PlaylistsID: user.PlaylistID,
+			userResponse := models.UserResponse{
+				ID:    user.ID,
+				Login: user.Login,
+				Email: user.Email,
 			}
 			usersResponse = append(usersResponse, userResponse)
 		}
@@ -222,9 +214,9 @@ func (h *UserHandler) GetUserWithPagination() gin.HandlerFunc {
 	}
 }
 
-func (h *UserHandler) Login() gin.HandlerFunc {
+func (h *Handler) Login() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var user https.User
+		var user models.UserRequest
 
 		if err := c.ShouldBindJSON(&user); err != nil {
 			h.logger.Error("Invalid request", slog.Any("error", err))
@@ -239,7 +231,7 @@ func (h *UserHandler) Login() gin.HandlerFunc {
 			return
 		}
 
-		tokenResponse := dto.TokenResponse{
+		tokenResponse := models.TokenResponse{
 			Token: token,
 		}
 
