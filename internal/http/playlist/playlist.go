@@ -40,6 +40,10 @@ func (h *Handler) CreatePlaylist() gin.HandlerFunc {
 			return
 		}
 
+		// TODO: get user ID from request
+		// c.Get("userID")
+		// И потом если нужно ты можешь получить польщователя по этому айди из репозитория
+
 		playlistServ := models.Playlist{
 			Name:   playlist.Name,
 			UserID: playlist.UserID,
@@ -52,6 +56,7 @@ func (h *Handler) CreatePlaylist() gin.HandlerFunc {
 			return
 		}
 
+		// TODO: или ничего не возвращай или возвращай созданный плейлист
 		message := models.MessageResponse{
 			Message: "Created playlist",
 		}
@@ -218,6 +223,7 @@ func (h *Handler) UpdatePlaylist() gin.HandlerFunc {
 			return
 		}
 
+		// TODO: или ничего не возвращай или возвращай созданный плейлист
 		response := models.MessageResponse{
 			Message: "Updated playlist",
 		}
@@ -238,6 +244,7 @@ func (h *Handler) DeletePlaylist() gin.HandlerFunc {
 
 		err = h.service.DeletePlaylist(c.Request.Context(), id)
 		if err != nil {
+			// TODO: storage у тебя больще не возвращает sql.ErrNoRows
 			if errors.Is(err, sql.ErrNoRows) {
 				h.logger.Error("Playlist not found", slog.Any("error", err))
 				c.JSON(http.StatusNotFound, gin.H{"error": "Playlist not found"})
@@ -248,6 +255,7 @@ func (h *Handler) DeletePlaylist() gin.HandlerFunc {
 			return
 		}
 
+		// TODO: или ничего не возвращай или возвращай созданный плейлист
 		message := models.MessageResponse{
 			Message: "Deleted playlist",
 		}

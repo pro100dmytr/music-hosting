@@ -2,13 +2,14 @@ package auth
 
 import (
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
 	"time"
+
+	"github.com/golang-jwt/jwt/v4"
 )
 
+// TODO: брать secretKey из конфига
 var secretKey = []byte("12456673443")
 
-// TODO: move to 'auth' package
 func GenerateToken(userID int) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
@@ -36,6 +37,7 @@ func ValidateToken(tokenString string) (int, error) {
 		return 0, fmt.Errorf("invalid token")
 	}
 
+	// TODO: приводи сразу к int, а не к float64
 	userID, ok := claims["user_id"].(float64)
 	if !ok {
 		return 0, fmt.Errorf("invalid token")

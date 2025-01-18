@@ -29,6 +29,9 @@ func NewUserService(userRepo *repository.UserStorage, logger *slog.Logger) *User
 	}
 }
 
+// TODO: нужно создать Auth сервис где будет логика логина и регистрации и
+// вынести все функции которые этого касаются в этот сервис
+
 func ValidateUser(user *models.User) error {
 	if user.Login == "" {
 		return errors.New("login is required")
@@ -111,6 +114,8 @@ func (s *UserService) CreateUser(ctx context.Context, user *models.User) error {
 
 func (s *UserService) GetUser(ctx context.Context, id int) (*models.User, error) {
 	repoUser, err := s.userRepo.Get(ctx, id)
+	// TODO: перепроверить логику. Если юзер не найдет то вернется nil
+	// В других  местах тоже нужно перепроверить
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, sql.ErrNoRows
@@ -165,6 +170,7 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, user *models.User)
 	}
 	err = s.userRepo.Update(ctx, repoUser, id)
 	if err != nil {
+		// TODO: storage у тебя больще не возвращает sql.ErrNoRows
 		if errors.Is(err, sql.ErrNoRows) {
 			return sql.ErrNoRows
 		}
@@ -177,6 +183,7 @@ func (s *UserService) UpdateUser(ctx context.Context, id int, user *models.User)
 func (s *UserService) DeleteUser(ctx context.Context, userID int) error {
 	err := s.userRepo.Delete(ctx, userID)
 	if err != nil {
+		// TODO: storage у тебя больще не возвращает sql.ErrNoRows
 		if errors.Is(err, sql.ErrNoRows) {
 			return sql.ErrNoRows
 		}
@@ -220,6 +227,7 @@ func (s *UserService) GetUsersWithPagination(ctx context.Context, limit, offset 
 	return users, nil
 }
 
+// TODO: move to Auth service
 func (s *UserService) GetToken(ctx context.Context, login string, password string) (string, error) {
 	if login == "" || password == "" {
 		return "", fmt.Errorf("invalid login or password")

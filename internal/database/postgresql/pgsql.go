@@ -31,7 +31,6 @@ func OpenConnection(cfg *config.DBConfig) (*sql.DB, error) {
 
 	err = goose.Up(db, "db\\migrations")
 	if err != nil {
-		// TODO: remove log, just return error
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 

@@ -25,6 +25,7 @@ func Run(configPath string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
+	// TODO: move mapping to config
 	var level slog.Level
 	switch loggerCfg.LogLevel {
 	case "debug":
@@ -39,13 +40,17 @@ func Run(configPath string) error {
 		level = slog.LevelDebug
 	}
 
-	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: level,
-	})
-	logger := slog.New(handler)
+	// level = cfg.Logger.Level
+
+	logger := slog.New(
+		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: level,
+		}),
+	)
 
 	db, err := postgresql.OpenConnection(dbCfg)
 	if err != nil {
+		// TODO: delete log
 		logger.Error("Error creating database connection", slog.Any("error", err))
 		return fmt.Errorf("failed to create database connection: %w", err)
 	}
@@ -53,15 +58,18 @@ func Run(configPath string) error {
 
 	userStorage, err := repository.NewUserStorage(db)
 	if err != nil {
+		// TODO: delete log
 		logger.Error("Error creating user storage", slog.Any("error", err))
 		return fmt.Errorf("failed to create user storage: %w", err)
 	}
 
+	// TODO: rename userService to userSvc. Rename other services too
 	userService := service.NewUserService(userStorage, logger)
 	userHandler := user.NewHandler(userService, logger)
 
 	trackStorage, err := repository.NewTrackStorage(db)
 	if err != nil {
+		// TODO: delete log
 		logger.Error("Error creating track storage", slog.Any("error", err))
 		return fmt.Errorf("failed to create track storage: %w", err)
 	}
@@ -71,6 +79,7 @@ func Run(configPath string) error {
 
 	playlistStorage, err := repository.NewPlaylistStorage(db)
 	if err != nil {
+		// TODO: delete log
 		logger.Error("Error creating playlist storage", slog.Any("error", err))
 		return fmt.Errorf("failed to create playlist storage: %w", err)
 	}
@@ -80,16 +89,20 @@ func Run(configPath string) error {
 
 	router := gin.Default()
 
+	// // TODO: rename from /users/create to POST /users. Rename other URLs too
 	router.POST("/users/create", userHandler.CreateUser())
 	router.POST("/tracks/create", trackHandler.CreateTrack())
 	router.POST("/playlists/create", playlistHandler.CreatePlaylist())
+	// TODO: rename /users/login to /login
 	router.POST("/users/login", userHandler.Login())
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+	// TODO: rename Routes to routes
 	Routes := router.Group("/api/v1")
 	Routes.Use(middleware.AuthMiddleware())
 	{
-		Routes.GET("/users", userHandler.GetAllUsers())
+
+		Routes.GET("/users", userHandler.GetAllUsers()) // TODO: этот хэндлер тебе не нужен
 		Routes.GET("/users/:id", userHandler.GetUserID())
 		Routes.GET("/users?offset=1&limit=10", userHandler.GetUserWithPagination())
 		Routes.PUT("/users/:id", userHandler.UpdateUser())
@@ -97,17 +110,23 @@ func Run(configPath string) error {
 
 		Routes.GET("/tracks", trackHandler.GetAllTracks())
 		Routes.GET("/tracks/:id", trackHandler.GetTrackByID())
+
+		// TODO: следующие 4 хэндлера нужно объединить в один
 		Routes.GET("/tracks?name=<track_name>", trackHandler.GetTracksByName())
 		Routes.GET("/tracks?artist=<artist>", trackHandler.GetTrackByArtist())
 		Routes.GET("/tracks?playlistID=<playlistID>", trackHandler.GetTracksByPlaylistID())
 		Routes.GET("/tracks?offset=1&limit=10", trackHandler.GetTracksWithPagination())
+
 		Routes.PUT("/tracks/:id", trackHandler.UpdateTrack())
 		Routes.DELETE("/tracks/:id", trackHandler.DeleteTrack())
 
 		Routes.GET("/playlists", playlistHandler.GetAllPlaylists())
 		Routes.GET("/playlists/:id", playlistHandler.GetPlaylistByID())
+
+		// TODO: следующие 2 хэндлера нужно объединить в один
 		Routes.GET("/playlists?name=<playlist_name>", playlistHandler.GetPlaylistByName())
 		Routes.GET("/playlists?userid=<user_id>", playlistHandler.GetPlaylistByUserID())
+
 		Routes.PUT("/playlists/:id", playlistHandler.UpdatePlaylist())
 		Routes.DELETE("/playlists/:id", playlistHandler.DeletePlaylist())
 	}

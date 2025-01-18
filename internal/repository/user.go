@@ -110,19 +110,22 @@ func (s *UserStorage) Delete(ctx context.Context, id int) error {
 		return err
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
+	// TODO: если ничего не удалилили то это не ошибка
 
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
+	//rowsAffected, err := result.RowsAffected()
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//if rowsAffected == 0 {
+	//	return sql.ErrNoRows
+	//}
 
 	return nil
 }
 
 func (s *UserStorage) GetUsers(ctx context.Context, offset, limit int) ([]*User, error) {
+	// TODO: удалить ненужную транзакцию
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -170,6 +173,7 @@ func (s *UserStorage) GetUserByLogin(ctx context.Context, login string) (*User, 
 	return user, nil
 }
 
+// TODO: подумать над тем что плейлист не может существовать без юзера
 func (s *UserStorage) AddPlaylistsToUser(ctx context.Context, userID int, playlistID int) error {
 	const query = `UPDATE playlists SET user_id = $1 WHERE id = $2`
 
