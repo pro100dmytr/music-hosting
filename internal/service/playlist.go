@@ -165,6 +165,7 @@ func (s *PlaylistService) UpdatePlaylist(ctx context.Context, playlist *models.P
 	}
 
 	repoPlaylist := &repository.Playlist{
+		ID:        playlist.ID,
 		Name:      playlist.Name,
 		UserID:    playlist.UserID,
 		UpdatedAt: time.Now().UTC(),
