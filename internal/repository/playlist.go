@@ -34,6 +34,7 @@ func (s *PlaylistStorage) Create(ctx context.Context, playlist *Playlist) error 
 }
 
 func (s *PlaylistStorage) GetAll(ctx context.Context) ([]*Playlist, error) {
+	// TODO: удалить ненужную транзакцию
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -104,6 +105,8 @@ func (s *PlaylistStorage) GetAll(ctx context.Context) ([]*Playlist, error) {
 }
 
 func (s *PlaylistStorage) Get(ctx context.Context, id int) (*Playlist, error) {
+	// TODO: удалить ненужную транзакцию
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -168,6 +171,8 @@ func (s *PlaylistStorage) Get(ctx context.Context, id int) (*Playlist, error) {
 	return playlist, nil
 }
 func (s *PlaylistStorage) GetByUserID(ctx context.Context, userID int) ([]*Playlist, error) {
+	// TODO: удалить ненужную транзакцию
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -238,6 +243,8 @@ func (s *PlaylistStorage) GetByUserID(ctx context.Context, userID int) ([]*Playl
 }
 
 func (s *PlaylistStorage) GetByName(ctx context.Context, name string) ([]*Playlist, error) {
+	// TODO: удалить ненужную транзакцию
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -315,14 +322,15 @@ func (s *PlaylistStorage) Update(ctx context.Context, playlist *Playlist) error 
 		return err
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
+	// TODO: если не проапдейтили то это не ошибка
+	//rowsAffected, err := result.RowsAffected()
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//if rowsAffected == 0 {
+	//	return sql.ErrNoRows
+	//}
 
 	return nil
 }
@@ -334,6 +342,7 @@ func (s *PlaylistStorage) Delete(ctx context.Context, id int) error {
 		return err
 	}
 
+	// TODO: DELETE
 	_, err = result.RowsAffected()
 	if err != nil {
 		return err
@@ -342,7 +351,11 @@ func (s *PlaylistStorage) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
+// TODO: Разделить UpdatePlaylistTracks на AddTracks и DeleteTracks
+// а логику определения того что нужно добавить или удалить нужно вынести
+// в сервис
 func (s *PlaylistStorage) UpdatePlaylistTracks(ctx context.Context, playlistID int, trackIDs []int) error {
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)

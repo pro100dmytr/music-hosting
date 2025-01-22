@@ -2,13 +2,19 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
 
-// TODO: create DBConfig struct
+// TODO: add other configs here and return it in LoadConfig
+type Config struct {
+	DB DBConfig
+	// ..
+}
+
 type DBConfig struct {
 	Host     string `yaml:"host"`
 	Port     string `yaml:"port"`
@@ -18,13 +24,12 @@ type DBConfig struct {
 	SSLMode  string `yaml:"sslmode"`
 }
 
-// TODO: create ServerConfig struct
 type ServerConfig struct {
 	Port string `yaml:"port"`
 }
 
 type Logger struct {
-	LogLevel string `yaml:"log_level"`
+	LogLevel slog.Level `yaml:"log_level"`
 }
 
 func LoadConfig(configPath string) (*ServerConfig, *DBConfig, *Logger, error) {

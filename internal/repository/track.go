@@ -145,10 +145,11 @@ func (s *TrackStorage) Update(ctx context.Context, track *Track) error {
 		return err
 	}
 
-	_, err = result.RowsAffected()
-	if err != nil {
-		return err
-	}
+	// TODO: delete
+	//_, err = result.RowsAffected()
+	//if err != nil {
+	//	return err
+	//}
 
 	return nil
 }
@@ -160,14 +161,15 @@ func (s *TrackStorage) Delete(ctx context.Context, id int) error {
 		return err
 	}
 
-	n, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if n == 0 {
-		return sql.ErrNoRows
-	}
+	// TODO: delete
+	//n, err := result.RowsAffected()
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//if n == 0 {
+	//	return sql.ErrNoRows
+	//}
 
 	return nil
 }

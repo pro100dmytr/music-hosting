@@ -22,6 +22,7 @@ type Track struct {
 	Dislikes int
 }
 
+// TODO: delete JSON tags
 type Playlist struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`
