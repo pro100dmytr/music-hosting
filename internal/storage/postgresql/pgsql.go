@@ -10,6 +10,16 @@ import (
 )
 
 func OpenConnection(cfg *config.DBConfig) (*sql.DB, error) {
+	if cfg.Host == "" || cfg.Port == "" || cfg.User == "" || cfg.Password == "" || cfg.DBName == "" || cfg.SSLMode == "" {
+		return nil, fmt.Errorf("incomplete storage configuration: host=%s, port=%s, user=%s, dbname=%s, sslmode=%s",
+			cfg.Host,
+			cfg.Port,
+			cfg.User,
+			cfg.DBName,
+			cfg.SSLMode,
+		)
+	}
+
 	connStr := fmt.Sprintf(
 		"host=%s port=%s user=%s dbname=%s password=%s sslmode=%s",
 		cfg.Host,
@@ -22,16 +32,15 @@ func OpenConnection(cfg *config.DBConfig) (*sql.DB, error) {
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open storage: %w", err)
 	}
 
 	if err = db.Ping(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to ping storage: %w", err)
 	}
 
-	err = goose.Up(db, "db\\migrations")
+	err = goose.Up(db, "db/migrations")
 	if err != nil {
-		// TODO: remove log, just return error
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 

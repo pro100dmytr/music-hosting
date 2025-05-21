@@ -25,7 +25,6 @@ import (
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
 
-// TODO: move main.go to cmd/main.go
 func main() {
 	err := app.Run("internal/config/config.yaml")
 	if err != nil {

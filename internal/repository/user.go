@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 )
 
 type UserStorage struct {
@@ -53,31 +52,6 @@ func (s *UserStorage) Get(ctx context.Context, id int) (*User, error) {
 	return user, nil
 }
 
-func (s *UserStorage) GetAll(ctx context.Context) ([]*User, error) {
-	const query = `SELECT id, login, email FROM users`
-
-	rows, err := s.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var users []*User
-	for rows.Next() {
-		user := &User{}
-		if err := rows.Scan(
-			&user.ID,
-			&user.Login,
-			&user.Email,
-		); err != nil {
-			return nil, err
-		}
-		users = append(users, user)
-	}
-
-	return users, rows.Err()
-}
-
 func (s *UserStorage) Update(ctx context.Context, user *User, id int) error {
 	const query = `UPDATE users SET login = $1, email = $2, password_hash = $3, salt = $4 WHERE id = $5`
 
@@ -105,31 +79,15 @@ func (s *UserStorage) Update(ctx context.Context, user *User, id int) error {
 func (s *UserStorage) Delete(ctx context.Context, id int) error {
 	const query = `DELETE FROM users WHERE id = $1`
 
-	result, err := s.db.ExecContext(ctx, query, id)
+	_, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
 	}
 
 	return nil
 }
 
 func (s *UserStorage) GetUsers(ctx context.Context, offset, limit int) ([]*User, error) {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	defer tx.Rollback()
-
 	const query = `
         SELECT id, login, email FROM users OFFSET $1 LIMIT $2`
 
@@ -150,10 +108,6 @@ func (s *UserStorage) GetUsers(ctx context.Context, offset, limit int) ([]*User,
 			return nil, err
 		}
 		users = append(users, user)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return users, rows.Err()
@@ -192,7 +146,7 @@ func (s *UserStorage) RemovePlaylistsFromUser(ctx context.Context, userID int) e
 	return nil
 }
 
-func (s *UserStorage) UpdatePlaylistsForUser(ctx context.Context, userID int) error {
+func (s *UserStorage) UpdatePlбaylistsForUser(ctx context.Context, userID int) error {
 	const query = `UPDATE playlists SET updated_at = NOW() WHERE user_id = $1`
 
 	_, err := s.db.ExecContext(ctx, query, userID)

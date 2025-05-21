@@ -2,8 +2,6 @@ package track
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"log/slog"
 	"music-hosting/internal/models"
 	"net/http"
@@ -15,11 +13,7 @@ import (
 type Service interface {
 	CreateTrack(ctx context.Context, track *models.Track) error
 	GetTrackByID(ctx context.Context, id int) (*models.Track, error)
-	GetAllTracks(ctx context.Context) ([]*models.Track, error)
-	GetTracksByName(ctx context.Context, name string) ([]*models.Track, error)
-	GetTracksByArtist(ctx context.Context, artist string) ([]*models.Track, error)
-	GetTracksByPlaylistID(ctx context.Context, playlistID int) ([]*models.Track, error)
-	GetTracksWithPagination(ctx context.Context, offset, limit string) ([]*models.Track, error)
+	GetTracks(ctx context.Context, name, artist string, playlistID, offset, limit int) ([]*models.Track, error)
 	UpdateTrack(ctx context.Context, track *models.Track) error
 	DeleteTrack(ctx context.Context, id int) error
 }
@@ -60,11 +54,7 @@ func (h *Handler) CreateTrack() gin.HandlerFunc {
 			return
 		}
 
-		message := models.MessageResponse{
-			Message: "Created track",
-		}
-
-		c.JSON(http.StatusCreated, message)
+		c.JSON(http.StatusOK, nil)
 	}
 }
 
@@ -80,12 +70,6 @@ func (h *Handler) GetTrackByID() gin.HandlerFunc {
 
 		track, err := h.service.GetTrackByID(c.Request.Context(), id)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				h.logger.Error("Track not found", slog.Any("error", err))
-				c.JSON(http.StatusNotFound, gin.H{"error": "Track not found"})
-				return
-			}
-
 			h.logger.Error("Error fetching track by ID", slog.Any("error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching track by ID"})
 			return
@@ -101,33 +85,6 @@ func (h *Handler) GetTrackByID() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, trackResponse)
-	}
-}
-
-func (h *Handler) GetAllTracks() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		tracks, err := h.service.GetAllTracks(c.Request.Context())
-		if err != nil {
-			h.logger.Error("Error fetching all tracks", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching all tracks"})
-			return
-		}
-
-		var tracksResponse []models.TrackResponse
-		for _, track := range tracks {
-			trackResponse := models.TrackResponse{
-				ID:       track.ID,
-				Name:     track.Name,
-				Artist:   track.Artist,
-				URL:      track.URL,
-				Likes:    track.Likes,
-				Dislikes: track.Dislikes,
-			}
-
-			tracksResponse = append(tracksResponse, trackResponse)
-		}
-
-		c.JSON(http.StatusOK, tracksResponse)
 	}
 }
 
@@ -164,11 +121,7 @@ func (h *Handler) UpdateTrack() gin.HandlerFunc {
 			return
 		}
 
-		response := models.MessageResponse{
-			Message: "Updated track",
-		}
-
-		c.JSON(http.StatusOK, response)
+		c.JSON(http.StatusOK, nil)
 	}
 }
 
@@ -189,79 +142,48 @@ func (h *Handler) DeleteTrack() gin.HandlerFunc {
 			return
 		}
 
-		message := models.MessageResponse{
-			Message: "Deleted track",
-		}
-
-		c.JSON(http.StatusOK, message)
+		c.JSON(http.StatusOK, nil)
 	}
 }
 
-func (h *Handler) GetTracksWithPagination() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		offset := c.DefaultQuery("offset", "0")
-		limit := c.DefaultQuery("limit", "10")
-
-		tracks, err := h.service.GetTracksWithPagination(c.Request.Context(), limit, offset)
-		if err != nil {
-			h.logger.Error("Error fetching tracks with pagination", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching tracks with pagination"})
-			return
-		}
-
-		var tracksResponse []models.TrackResponse
-		for _, track := range tracks {
-			trackResponse := models.TrackResponse{
-				ID:       track.ID,
-				Name:     track.Name,
-				Artist:   track.Artist,
-				URL:      track.URL,
-				Likes:    track.Likes,
-				Dislikes: track.Dislikes,
-			}
-
-			tracksResponse = append(tracksResponse, trackResponse)
-		}
-
-		c.JSON(http.StatusOK, tracksResponse)
-	}
-}
-
-func (h *Handler) GetTracksByName() gin.HandlerFunc {
+func (h *Handler) GetTracks() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Query("name")
-		tracks, err := h.service.GetTracksByName(c.Request.Context(), name)
-		if err != nil {
-			h.logger.Error("Error fetching track by name", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching track by name"})
-			return
-		}
-
-		var tracksResponse []models.TrackResponse
-		for _, track := range tracks {
-			trackResponse := models.TrackResponse{
-				ID:       track.ID,
-				Name:     track.Name,
-				Artist:   track.Artist,
-				URL:      track.URL,
-				Likes:    track.Likes,
-				Dislikes: track.Dislikes,
-			}
-
-			tracksResponse = append(tracksResponse, trackResponse)
-		}
-
-		c.JSON(http.StatusOK, tracksResponse)
-	}
-}
-
-func (h *Handler) GetTrackByArtist() gin.HandlerFunc {
-	return func(c *gin.Context) {
 		artist := c.Query("artist")
-		tracks, err := h.service.GetTracksByArtist(c.Request.Context(), artist)
+		playlistIDStr := c.Query("playlistID")
+		offsetStr := c.DefaultQuery("offset", "0")
+		limitStr := c.DefaultQuery("limit", "10")
+
+		var playlistID, offset, limit int
+		var err error
+
+		if playlistIDStr != "" {
+			playlistID, err = strconv.Atoi(playlistIDStr)
+			if err != nil {
+				h.logger.Error("Invalid playlist ID", slog.Any("error", err))
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid playlist ID"})
+				return
+			}
+		}
+
+		offset, err = strconv.Atoi(offsetStr)
 		if err != nil {
-			h.logger.Error("Error fetching tracks by artist", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching tracks by artist"})
+			h.logger.Error("Invalid offset", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid offset"})
+			return
+		}
+
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil || limit < 1 {
+			h.logger.Error("Invalid limit", slog.Any("error", err))
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit"})
+			return
+		}
+
+		tracks, err := h.service.GetTracks(c.Request.Context(), name, artist, playlistID, offset, limit)
+		if err != nil {
+			h.logger.Error("Error fetching tracks", slog.Any("error", err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching tracks"})
 			return
 		}
 
@@ -275,42 +197,6 @@ func (h *Handler) GetTrackByArtist() gin.HandlerFunc {
 				Likes:    track.Likes,
 				Dislikes: track.Dislikes,
 			}
-
-			tracksResponse = append(tracksResponse, trackResponse)
-		}
-
-		c.JSON(http.StatusOK, tracksResponse)
-	}
-}
-
-func (h *Handler) GetTracksByPlaylistID() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idStr := c.Query("playlistID")
-		playlistID, err := strconv.Atoi(idStr)
-		if err != nil {
-			h.logger.Error("Invalid playlist ID", slog.Any("error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid playlist ID"})
-			return
-		}
-
-		tracks, err := h.service.GetTracksByPlaylistID(c.Request.Context(), playlistID)
-		if err != nil {
-			h.logger.Error("Error fetching tracks by playlist", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching tracks by playlist"})
-			return
-		}
-
-		var tracksResponse []models.TrackResponse
-		for _, track := range tracks {
-			trackResponse := models.TrackResponse{
-				ID:       track.ID,
-				Name:     track.Name,
-				Artist:   track.Artist,
-				URL:      track.URL,
-				Likes:    track.Likes,
-				Dislikes: track.Dislikes,
-			}
-
 			tracksResponse = append(tracksResponse, trackResponse)
 		}
 

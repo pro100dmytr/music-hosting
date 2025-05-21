@@ -2,13 +2,23 @@ package auth
 
 import (
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
+	"log"
+	"os"
 	"time"
+
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/joho/godotenv"
 )
 
-var secretKey = []byte("12456673443")
+func init() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+}
 
-// TODO: move to 'auth' package
+var secretKey = []byte(os.Getenv("JWT_SECRET_KEY"))
+
 func GenerateToken(userID int) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,

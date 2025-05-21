@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
+	"strings"
 )
 
 type TrackStorage struct {
@@ -41,16 +43,48 @@ func (s *TrackStorage) Get(ctx context.Context, id int) (*Track, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+		
 		return nil, err
 	}
 
-	track.ID = id
 	return track, nil
 }
 
-func (s *TrackStorage) GetAll(ctx context.Context) ([]*Track, error) {
-	const query = `SELECT * FROM tracks`
-	rows, err := s.db.QueryContext(ctx, query)
+func (s *TrackStorage) GetTracks(ctx context.Context, name, artist string, playlistID, offset, limit int) ([]*Track, error) {
+	baseQuery := `SELECT t.id, t.name, t.artist, t.url, t.likes, t.dislikes FROM tracks t`
+	var conditions []string
+	var args []interface{}
+
+	if name != "" {
+		conditions = append(conditions, "t.name = $"+strconv.Itoa(len(args)+1))
+		args = append(args, name)
+	}
+
+	if artist != "" {
+		conditions = append(conditions, "t.artist = $"+strconv.Itoa(len(args)+1))
+		args = append(args, artist)
+	}
+
+	if playlistID > 0 {
+		baseQuery += ` JOIN playlist_tracks pt ON pt.track_id = t.id`
+		conditions = append(conditions, "pt.playlist_id = $"+strconv.Itoa(len(args)+1))
+		args = append(args, playlistID)
+	}
+
+	if len(conditions) > 0 {
+		baseQuery += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	if limit > 0 {
+		baseQuery += " LIMIT $" + strconv.Itoa(len(args)+1)
+		args = append(args, limit)
+	}
+	if offset >= 0 {
+		baseQuery += " OFFSET $" + strconv.Itoa(len(args)+1)
+		args = append(args, offset)
+	}
+
+	rows, err := s.db.QueryContext(ctx, baseQuery, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -59,68 +93,7 @@ func (s *TrackStorage) GetAll(ctx context.Context) ([]*Track, error) {
 	var tracks []*Track
 	for rows.Next() {
 		track := &Track{}
-		if err := rows.Scan(
-			&track.ID,
-			&track.Name,
-			&track.Artist,
-			&track.URL,
-			&track.Likes,
-			&track.Dislikes,
-		); err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
-	}
-
-	return tracks, rows.Err()
-}
-
-func (s *TrackStorage) GetByName(ctx context.Context, name string) ([]*Track, error) {
-	const query = `SELECT * FROM tracks WHERE name = $1`
-	rows, err := s.db.QueryContext(ctx, query, name)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tracks []*Track
-	for rows.Next() {
-		track := &Track{}
-		if err := rows.Scan(
-			&track.ID,
-			&track.Name,
-			&track.Artist,
-			&track.URL,
-			&track.Likes,
-			&track.Dislikes,
-		); err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
-	}
-
-	return tracks, rows.Err()
-}
-
-func (s *TrackStorage) GetByArtist(ctx context.Context, artist string) ([]*Track, error) {
-	const query = `SELECT * FROM tracks WHERE artist = $1`
-	rows, err := s.db.QueryContext(ctx, query, artist)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tracks []*Track
-	for rows.Next() {
-		track := &Track{}
-		if err := rows.Scan(
-			&track.ID,
-			&track.Name,
-			&track.Artist,
-			&track.URL,
-			&track.Likes,
-			&track.Dislikes,
-		); err != nil {
+		if err := rows.Scan(&track.ID, &track.Name, &track.Artist, &track.URL, &track.Likes, &track.Dislikes); err != nil {
 			return nil, err
 		}
 		tracks = append(tracks, track)
@@ -131,7 +104,7 @@ func (s *TrackStorage) GetByArtist(ctx context.Context, artist string) ([]*Track
 
 func (s *TrackStorage) Update(ctx context.Context, track *Track) error {
 	const query = `UPDATE tracks SET name = $1, artist = $2, url = $3, likes = $4, dislikes = $5 WHERE id = $6`
-	result, err := s.db.ExecContext(
+	_, err := s.db.ExecContext(
 		ctx,
 		query,
 		track.Name,
@@ -145,82 +118,15 @@ func (s *TrackStorage) Update(ctx context.Context, track *Track) error {
 		return err
 	}
 
-	_, err = result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
 func (s *TrackStorage) Delete(ctx context.Context, id int) error {
 	const query = `DELETE FROM tracks WHERE id = $1`
-	result, err := s.db.ExecContext(ctx, query, id)
+	_, err := s.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
-	}
-
-	n, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if n == 0 {
-		return sql.ErrNoRows
 	}
 
 	return nil
-}
-
-func (s *TrackStorage) GetTracks(ctx context.Context, offset, limit int) ([]*Track, error) {
-	const query = `SELECT id, name, artist, url, likes, dislikes FROM tracks OFFSET $1 LIMIT $2`
-
-	rows, err := s.db.QueryContext(ctx, query, offset, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tracks []*Track
-	for rows.Next() {
-		track := &Track{}
-		if err := rows.Scan(
-			&track.ID,
-			&track.Name,
-			&track.Artist,
-			&track.URL,
-			&track.Likes,
-			&track.Dislikes,
-		); err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
-	}
-
-	return tracks, rows.Err()
-}
-
-func (s *TrackStorage) GetTracksByPlaylistID(ctx context.Context, playlistID int) ([]*Track, error) {
-	const query = `SELECT track_id FROM playlist_tracks WHERE playlist_id = $1`
-
-	rows, err := s.db.QueryContext(ctx, query, playlistID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var tracksID []*Track
-	for rows.Next() {
-		var trackID *Track
-		if err := rows.Scan(&trackID); err != nil {
-			return nil, err
-		}
-		tracksID = append(tracksID, trackID)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return tracksID, nil
 }

@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"log/slog"
 	"music-hosting/internal/models"
@@ -46,10 +44,11 @@ func (s *PlaylistService) CreatePlaylist(ctx context.Context, playlist *models.P
 func (s *PlaylistService) GetPlaylistByID(ctx context.Context, id int) (*models.Playlist, error) {
 	repoPlaylist, err := s.repo.Get(ctx, id)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
 		return nil, err
+	}
+
+	if repoPlaylist == nil {
+		return nil, nil
 	}
 
 	var tracks []*models.Track
@@ -68,9 +67,8 @@ func (s *PlaylistService) GetPlaylistByID(ctx context.Context, id int) (*models.
 
 	return playlist, nil
 }
-
-func (s *PlaylistService) GetAllPlaylists(ctx context.Context) ([]*models.Playlist, error) {
-	repoPlaylists, err := s.repo.GetAll(ctx)
+func (s *PlaylistService) GetPlaylists(ctx context.Context, name string, userID int) ([]*models.Playlist, error) {
+	repoPlaylists, err := s.repo.GetPlaylists(ctx, name, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -97,66 +95,28 @@ func (s *PlaylistService) GetAllPlaylists(ctx context.Context) ([]*models.Playli
 	return playlists, nil
 }
 
-func (s *PlaylistService) GetPlaylistsByName(ctx context.Context, name string) ([]*models.Playlist, error) {
-	repoPlaylists, err := s.repo.GetByName(ctx, name)
+func (s *PlaylistService) UpdatePlaylistTracks(ctx context.Context, playlistID int, newTrackIDs []int) error {
+	existingTrackIDs, err := s.repo.GetExistingTracks(ctx, playlistID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
-		}
-		return nil, err
+		return fmt.Errorf("failed to get existing tracks: %w", err)
 	}
 
-	var playlists []*models.Playlist
-	for _, repoPlaylist := range repoPlaylists {
-		playlist := &models.Playlist{
-			ID:        repoPlaylist.ID,
-			Name:      repoPlaylist.Name,
-			UserID:    repoPlaylist.UserID,
-			CreatedAt: repoPlaylist.CreatedAt,
-			UpdatedAt: repoPlaylist.UpdatedAt,
-		}
+	toDelete := difference(existingTrackIDs, newTrackIDs)
+	toAdd := difference(newTrackIDs, existingTrackIDs)
 
-		var tracks []*models.Track
-		for _, repoTrack := range repoPlaylist.Tracks {
-			tracks = append(tracks, repoTrack.ConvertToModel())
+	if len(toDelete) > 0 {
+		if err := s.repo.DeleteTracks(ctx, playlistID, toDelete); err != nil {
+			return fmt.Errorf("failed to delete tracks: %w", err)
 		}
-		playlist.Tracks = tracks
-
-		playlists = append(playlists, playlist)
 	}
 
-	return playlists, nil
-}
-
-func (s *PlaylistService) GetPlaylistsByUserID(ctx context.Context, userID int) ([]*models.Playlist, error) {
-	repoPlaylists, err := s.repo.GetByUserID(ctx, userID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+	if len(toAdd) > 0 {
+		if err := s.repo.AddTracks(ctx, playlistID, toAdd); err != nil {
+			return fmt.Errorf("failed to add tracks: %w", err)
 		}
-		return nil, err
 	}
 
-	var playlists []*models.Playlist
-	for _, repoPlaylist := range repoPlaylists {
-		playlist := &models.Playlist{
-			ID:        repoPlaylist.ID,
-			Name:      repoPlaylist.Name,
-			UserID:    repoPlaylist.UserID,
-			CreatedAt: repoPlaylist.CreatedAt,
-			UpdatedAt: repoPlaylist.UpdatedAt,
-		}
-
-		var tracks []*models.Track
-		for _, repoTrack := range repoPlaylist.Tracks {
-			tracks = append(tracks, repoTrack.ConvertToModel())
-		}
-		playlist.Tracks = tracks
-
-		playlists = append(playlists, playlist)
-	}
-
-	return playlists, nil
+	return nil
 }
 
 func (s *PlaylistService) UpdatePlaylist(ctx context.Context, playlist *models.Playlist, trackIDs []int) error {
@@ -171,34 +131,35 @@ func (s *PlaylistService) UpdatePlaylist(ctx context.Context, playlist *models.P
 		UpdatedAt: time.Now().UTC(),
 	}
 
-	err := s.repo.Update(ctx, repoPlaylist)
-	if err != nil {
-		return err
+	if err := s.repo.Update(ctx, repoPlaylist); err != nil {
+		return fmt.Errorf("failed to update playlist: %w", err)
 	}
 
-	existingTrackCount, err := s.repo.GetPlaylistTrackCount(ctx, repoPlaylist.ID)
-	if err != nil {
-		return fmt.Errorf("failed to get existing track count: %w", err)
-	}
-
-	if existingTrackCount == len(trackIDs) {
-		return fmt.Errorf("no changes detected, playlist is already up to date")
-	}
-
-	err = s.repo.UpdatePlaylistTracks(ctx, repoPlaylist.ID, trackIDs)
-	if err != nil {
+	if err := s.UpdatePlaylistTracks(ctx, repoPlaylist.ID, trackIDs); err != nil {
 		return fmt.Errorf("failed to update playlist tracks: %w", err)
 	}
 
 	return nil
 }
 
+func difference(slice1, slice2 []int) []int {
+	m := make(map[int]struct{})
+	for _, v := range slice2 {
+		m[v] = struct{}{}
+	}
+
+	var diff []int
+	for _, v := range slice1 {
+		if _, found := m[v]; !found {
+			diff = append(diff, v)
+		}
+	}
+	return diff
+}
+
 func (s *PlaylistService) DeletePlaylist(ctx context.Context, id int) error {
 	err := s.repo.Delete(ctx, id)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return sql.ErrNoRows
-		}
 		return err
 	}
 

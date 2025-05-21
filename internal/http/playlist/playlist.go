@@ -2,8 +2,6 @@ package playlist
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"log/slog"
 	"music-hosting/internal/models"
 	"net/http"
@@ -15,9 +13,7 @@ import (
 type Service interface {
 	CreatePlaylist(ctx context.Context, playlist *models.Playlist) error
 	GetPlaylistByID(ctx context.Context, id int) (*models.Playlist, error)
-	GetAllPlaylists(ctx context.Context) ([]*models.Playlist, error)
-	GetPlaylistsByName(ctx context.Context, name string) ([]*models.Playlist, error)
-	GetPlaylistsByUserID(ctx context.Context, userID int) ([]*models.Playlist, error)
+	GetPlaylists(ctx context.Context, name string, userID int) ([]*models.Playlist, error)
 	UpdatePlaylist(ctx context.Context, playlist *models.Playlist, trackIDs []int) error
 	DeletePlaylist(ctx context.Context, id int) error
 }
@@ -33,16 +29,23 @@ func NewHandler(service Service, logger *slog.Logger) *Handler {
 
 func (h *Handler) CreatePlaylist() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var playlist models.PlaylistRequest
+		var playlist models.CreatePlaylistRequest
 		if err := c.ShouldBindJSON(&playlist); err != nil {
 			h.logger.Error("Error parsing request body", slog.Any("Error", err))
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Error parsing request body"})
 			return
 		}
 
+		userID, exists := c.Get("userID")
+		if !exists {
+			h.logger.Error("User ID not found in context")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authorized"})
+			return
+		}
+
 		playlistServ := models.Playlist{
 			Name:   playlist.Name,
-			UserID: playlist.UserID,
+			UserID: userID.(int),
 		}
 
 		err := h.service.CreatePlaylist(c.Request.Context(), &playlistServ)
@@ -52,11 +55,7 @@ func (h *Handler) CreatePlaylist() gin.HandlerFunc {
 			return
 		}
 
-		message := models.MessageResponse{
-			Message: "Created playlist",
-		}
-
-		c.JSON(http.StatusCreated, message)
+		c.JSON(http.StatusCreated, nil)
 	}
 }
 
@@ -72,21 +71,28 @@ func (h *Handler) GetPlaylistByID() gin.HandlerFunc {
 
 		playlist, err := h.service.GetPlaylistByID(c.Request.Context(), id)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				h.logger.Error("Playlist not found", slog.Any("error", err))
-				c.JSON(http.StatusNotFound, gin.H{"error": "Playlist not found"})
-				return
-			}
-
 			h.logger.Error("Error getting playlist", slog.Any("Error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting playlist"})
+			return
+		}
+
+		if playlist == nil {
+			h.logger.Info("Playlist not found", slog.Int("playlistID", id))
+			c.JSON(http.StatusNotFound, gin.H{"error": "Playlist not found"})
+			return
+		}
+
+		userID, exists := c.Get("userID")
+		if !exists {
+			h.logger.Error("User ID not found in context")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authorized"})
 			return
 		}
 
 		playlistResponse := models.PlaylistResponse{
 			ID:        playlist.ID,
 			Name:      playlist.Name,
-			UserID:    playlist.UserID,
+			UserID:    userID.(int),
 			Tracks:    playlist.Tracks,
 			CreatedAt: playlist.CreatedAt,
 			UpdatedAt: playlist.UpdatedAt,
@@ -96,9 +102,24 @@ func (h *Handler) GetPlaylistByID() gin.HandlerFunc {
 	}
 }
 
-func (h *Handler) GetAllPlaylists() gin.HandlerFunc {
+func (h *Handler) GetPlaylists() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		playlists, err := h.service.GetAllPlaylists(c.Request.Context())
+		name := c.Query("name")
+		userIDQuery := c.Query("userid")
+
+		var userID int
+		var err error
+
+		if userIDQuery != "" {
+			userID, err = strconv.Atoi(userIDQuery)
+			if err != nil {
+				h.logger.Error("Invalid user ID", slog.Any("Error", err))
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+				return
+			}
+		}
+
+		playlists, err := h.service.GetPlaylists(c.Request.Context(), name, userID)
 		if err != nil {
 			h.logger.Error("Error getting playlists", slog.Any("Error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting playlists"})
@@ -115,71 +136,6 @@ func (h *Handler) GetAllPlaylists() gin.HandlerFunc {
 				CreatedAt: playlist.CreatedAt,
 				UpdatedAt: playlist.UpdatedAt,
 			}
-
-			playlistsResponse = append(playlistsResponse, playlistResponse)
-		}
-
-		c.JSON(http.StatusOK, playlistsResponse)
-	}
-}
-
-func (h *Handler) GetPlaylistByName() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		name := c.Query("name")
-
-		playlists, err := h.service.GetPlaylistsByName(c.Request.Context(), name)
-		if err != nil {
-			h.logger.Error("Error getting playlist by name", slog.Any("Error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting playlist by name"})
-			return
-		}
-
-		var playlistsResponse []models.PlaylistResponse
-		for _, playlist := range playlists {
-			playlistResponse := models.PlaylistResponse{
-				ID:        playlist.ID,
-				Name:      playlist.Name,
-				UserID:    playlist.UserID,
-				Tracks:    playlist.Tracks,
-				CreatedAt: playlist.CreatedAt,
-				UpdatedAt: playlist.UpdatedAt,
-			}
-
-			playlistsResponse = append(playlistsResponse, playlistResponse)
-		}
-
-		c.JSON(http.StatusOK, playlistsResponse)
-	}
-}
-
-func (h *Handler) GetPlaylistByUserID() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userIDStr := c.Query("userID")
-		userID, err := strconv.Atoi(userIDStr)
-		if err != nil {
-			h.logger.Error("Invalid user ID", slog.Any("Error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
-			return
-		}
-
-		playlists, err := h.service.GetPlaylistsByUserID(c.Request.Context(), userID)
-		if err != nil {
-			h.logger.Error("Error getting playlist by user ID", slog.Any("Error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting playlist by user ID"})
-			return
-		}
-
-		var playlistsResponse []models.PlaylistResponse
-		for _, playlist := range playlists {
-			playlistResponse := models.PlaylistResponse{
-				ID:        playlist.ID,
-				Name:      playlist.Name,
-				UserID:    playlist.UserID,
-				Tracks:    playlist.Tracks,
-				CreatedAt: playlist.CreatedAt,
-				UpdatedAt: playlist.UpdatedAt,
-			}
-
 			playlistsResponse = append(playlistsResponse, playlistResponse)
 		}
 
@@ -197,35 +153,36 @@ func (h *Handler) UpdatePlaylist() gin.HandlerFunc {
 			return
 		}
 
-		var playlist models.PlaylistRequest
-		if err := c.ShouldBindJSON(&playlist); err != nil {
+		var playlistRequest models.CreatePlaylistRequest
+		if err := c.ShouldBindJSON(&playlistRequest); err != nil {
 			h.logger.Error("Error parsing request body", slog.Any("Error", err))
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Error parsing request body"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 			return
 		}
 
-		playlistServ := models.Playlist{
-			ID:     id,
-			Name:   playlist.Name,
-			UserID: playlist.UserID,
+		userID, exists := c.Get("userID")
+		if !exists {
+			h.logger.Error("User ID not found in context")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authorized"})
+			return
 		}
 
-		trackIDs := playlist.TrackIDs
-		err = h.service.UpdatePlaylist(c.Request.Context(), &playlistServ, trackIDs)
+		playlist := models.Playlist{
+			ID:     id,
+			Name:   playlistRequest.Name,
+			UserID: userID.(int),
+		}
+
+		err = h.service.UpdatePlaylist(c.Request.Context(), &playlist, playlistRequest.TrackIDs)
 		if err != nil {
 			h.logger.Error("Error updating playlist", slog.Any("Error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error updating playlist"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update playlist"})
 			return
 		}
 
-		response := models.MessageResponse{
-			Message: "Updated playlist",
-		}
-
-		c.JSON(http.StatusOK, response)
+		c.JSON(http.StatusOK, nil)
 	}
 }
-
 func (h *Handler) DeletePlaylist() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		idStr := c.Param("id")
@@ -238,20 +195,11 @@ func (h *Handler) DeletePlaylist() gin.HandlerFunc {
 
 		err = h.service.DeletePlaylist(c.Request.Context(), id)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				h.logger.Error("Playlist not found", slog.Any("error", err))
-				c.JSON(http.StatusNotFound, gin.H{"error": "Playlist not found"})
-				return
-			}
 			h.logger.Error("Error deleting playlist", slog.Any("Error", err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting playlist"})
 			return
 		}
 
-		message := models.MessageResponse{
-			Message: "Deleted playlist",
-		}
-
-		c.JSON(http.StatusOK, message)
+		c.JSON(http.StatusOK, nil)
 	}
 }

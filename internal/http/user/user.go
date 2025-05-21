@@ -15,7 +15,6 @@ import (
 type Service interface {
 	CreateUser(ctx context.Context, user *models.User) error
 	GetUser(ctx context.Context, id int) (*models.User, error)
-	GetAllUsers(ctx context.Context) ([]*models.User, error)
 	GetUsersWithPagination(ctx context.Context, limit, offset string) ([]*models.User, error)
 	UpdateUser(ctx context.Context, id int, user *models.User) error
 	DeleteUser(ctx context.Context, id int) error
@@ -54,11 +53,7 @@ func (h *Handler) CreateUser() gin.HandlerFunc {
 			return
 		}
 
-		userResponse := models.UserResponse{
-			ID: userServ.ID,
-		}
-
-		c.JSON(http.StatusCreated, userResponse.ID)
+		c.JSON(http.StatusCreated, nil)
 	}
 }
 
@@ -91,29 +86,6 @@ func (h *Handler) GetUserID() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, userResponse)
-	}
-}
-
-func (h *Handler) GetAllUsers() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		users, err := h.service.GetAllUsers(c.Request.Context())
-		if err != nil {
-			h.logger.Error("Failed to retrieve users", slog.Any("error", err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve users"})
-			return
-		}
-
-		var usersResponse []models.UserResponse
-		for _, user := range users {
-			userResponse := models.UserResponse{
-				ID:    user.ID,
-				Login: user.Login,
-				Email: user.Email,
-			}
-			usersResponse = append(usersResponse, userResponse)
-		}
-
-		c.JSON(http.StatusOK, usersResponse)
 	}
 }
 
@@ -151,11 +123,7 @@ func (h *Handler) UpdateUser() gin.HandlerFunc {
 			return
 		}
 
-		response := models.MessageResponse{
-			Message: "User updated",
-		}
-
-		c.JSON(http.StatusOK, response)
+		c.JSON(http.StatusOK, nil)
 	}
 }
 
@@ -180,11 +148,7 @@ func (h *Handler) DeleteUser() gin.HandlerFunc {
 			return
 		}
 
-		message := models.MessageResponse{
-			Message: "User deleted",
-		}
-
-		c.JSON(http.StatusOK, message)
+		c.JSON(http.StatusOK, nil)
 	}
 }
 

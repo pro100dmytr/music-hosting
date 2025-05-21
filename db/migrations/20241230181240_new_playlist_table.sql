@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS playlists (
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
-    );
+);
 -- +goose StatementEnd
 
 -- +goose Down
